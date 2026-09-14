@@ -1,0 +1,26 @@
+# Build directories
+build/
+bin/
+lib/
+out/
+cmake-build-*/
+.vs/
+.vscode/
+
+# Qt generated
+Makefile*
+*.qmake.stash
+*.qmake.cache
+ui_*.h
+moc_*.cpp
+qrc_*.cpp
+*.moc
+
+# Test outputs
+test_output/
+*.converted.*
+*.tmp
+
+# User-specific
+*.user
+*.user.*
