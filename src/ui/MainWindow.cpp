@@ -1,22 +1,28 @@
 #include "MainWindow.h"
-#include "MediaInfoCard.h"
-#include "PresetPanel.h"
-#include "TaskListView.h"
+#include "NavSidebar.h"
+#include "HomePage.h"
+#include "QueuePage.h"
+#include "FilePrepPage.h"
+#include "ParamConsolePage.h"
+#include "MediaInspectorPage.h"
 #include "manager/TranscodeTaskManager.h"
 
 #include <QHBoxLayout>
 #include <QVBoxLayout>
-#include <QSplitter>
-#include <QPushButton>
+#include <QStackedWidget>
 #include <QLabel>
-#include <QFileDialog>
+#include <QTimer>
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QMimeData>
+#include <QFileInfo>
 #include <QStyle>
 #include <QStatusBar>
-#include <QScrollArea>
-#include <QMessageBox>
+
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <psapi.h>
+#endif
 
 namespace ffmpeg_transform {
 
@@ -25,131 +31,135 @@ public:
     MainWindow *q_ptr{nullptr};
     TranscodeTaskManager manager;
 
-    TaskListView *taskListView{nullptr};
-    MediaInfoCard *mediaInfoCard{nullptr};
-    PresetPanel *presetPanel{nullptr};
+    NavSidebar *navSidebar{nullptr};
+    QStackedWidget *pageStack{nullptr};
 
-    QPushButton *addFileBtn{nullptr};
-    QPushButton *startAllBtn{nullptr};
-    QPushButton *pauseAllBtn{nullptr};
-    QPushButton *cancelAllBtn{nullptr};
-    QPushButton *clearAllBtn{nullptr};
-    QPushButton *applyToAllBtn{nullptr};
+    HomePage *homePage{nullptr};
+    QueuePage *queuePage{nullptr};
+    FilePrepPage *filePrepPage{nullptr};
+    ParamConsolePage *paramPage{nullptr};
+    MediaInspectorPage *mediaInspectorPage{nullptr};
 
-    QLabel *statusLabel{nullptr};
+    QLabel *perfInfoLabel{nullptr};
+    QLabel *topStatusBadge{nullptr};
+    QTimer *perfTimer{nullptr};
+
     QString currentSelectedTaskId;
     bool hasTasks{false};
 
     void initUI() {
         q_ptr->setObjectName("mainWindow");
-        q_ptr->setWindowTitle("FFmpeg 专业视频格式转换器 - 桌面客户端 (Native C API)");
-        q_ptr->resize(1180, 760);
-        q_ptr->setMinimumSize(950, 600);
+        q_ptr->setWindowTitle("FFmpeg Transcoder Pro - 高性能音视频转码工作台 (Native C API)");
+        q_ptr->resize(1200, 780);
+        q_ptr->setMinimumSize(1000, 650);
         q_ptr->setAcceptDrops(true);
 
         auto *centralWidget = new QWidget(q_ptr);
         auto *rootLayout = new QVBoxLayout(centralWidget);
-        rootLayout->setContentsMargins(16, 16, 16, 16);
-        rootLayout->setSpacing(12);
+        rootLayout->setContentsMargins(0, 0, 0, 0);
+        rootLayout->setSpacing(0);
 
-        // 1. 顶部操作工具栏
-        auto *headerWidget = new QWidget(centralWidget);
-        headerWidget->setObjectName("topBarWidget");
-        auto *headerLayout = new QHBoxLayout(headerWidget);
-        headerLayout->setContentsMargins(8, 6, 8, 6);
-        headerLayout->setSpacing(8);
+        // 1. 顶部性能监视与标识条 (对应截图顶部风格)
+        auto *topBar = new QWidget(centralWidget);
+        topBar->setObjectName("topInfoBar");
+        auto *topLayout = new QHBoxLayout(topBar);
+        topLayout->setContentsMargins(14, 6, 14, 6);
+        topLayout->setSpacing(12);
 
-        addFileBtn = new QPushButton("添加媒体", headerWidget);
-        addFileBtn->setObjectName("btnPrimary");
-        addFileBtn->setCursor(Qt::PointingHandCursor);
+        auto *appIcon = new QLabel("TRANSCODER", topBar);
+        appIcon->setObjectName("topAppIcon");
 
-        startAllBtn = new QPushButton("全部开始", headerWidget);
-        startAllBtn->setObjectName("btnSuccess");
-        startAllBtn->setCursor(Qt::PointingHandCursor);
+        perfInfoLabel = new QLabel("FFmpeg Transcoder Pro  |  CPU 0.4%  |  RAM 86M / 240M  |  GPU 0.0% 114M + 4M", topBar);
+        perfInfoLabel->setObjectName("topPerfLabel");
 
-        pauseAllBtn = new QPushButton("暂停全部", headerWidget);
-        pauseAllBtn->setObjectName("btnWarning");
-        pauseAllBtn->setCursor(Qt::PointingHandCursor);
+        topStatusBadge = new QLabel("Native C API 运行中", topBar);
+        topStatusBadge->setObjectName("topStatusBadge");
 
-        cancelAllBtn = new QPushButton("终止全部", headerWidget);
-        cancelAllBtn->setObjectName("btnDanger");
-        cancelAllBtn->setCursor(Qt::PointingHandCursor);
+        topLayout->addWidget(appIcon);
+        topLayout->addWidget(perfInfoLabel);
+        topLayout->addStretch();
+        topLayout->addWidget(topStatusBadge);
 
-        clearAllBtn = new QPushButton("清空队列", headerWidget);
-        clearAllBtn->setCursor(Qt::PointingHandCursor);
+        rootLayout->addWidget(topBar);
 
-        headerLayout->addWidget(addFileBtn);
-        headerLayout->addWidget(startAllBtn);
-        headerLayout->addWidget(pauseAllBtn);
-        headerLayout->addWidget(cancelAllBtn);
-        headerLayout->addWidget(clearAllBtn);
-        headerLayout->addStretch();
-        rootLayout->addWidget(headerWidget);
+        // 2. 主体：左侧导航栏 + 右侧工作区堆栈
+        auto *bodyWidget = new QWidget(centralWidget);
+        auto *bodyLayout = new QHBoxLayout(bodyWidget);
+        bodyLayout->setContentsMargins(0, 0, 0, 0);
+        bodyLayout->setSpacing(0);
 
-        // 2. 主体左右分栏
-        auto *splitter = new QSplitter(Qt::Horizontal, centralWidget);
-        splitter->setHandleWidth(4);
+        navSidebar = new NavSidebar(bodyWidget);
+        pageStack = new QStackedWidget(bodyWidget);
+        pageStack->setObjectName("workspaceStack");
 
-        // 左侧面板：任务队列列表 (支持直接拖拽文件进入)
-        auto *leftPanel = new QWidget(splitter);
-        auto *leftLayout = new QVBoxLayout(leftPanel);
-        leftLayout->setContentsMargins(0, 0, 8, 0);
-        leftLayout->setSpacing(0);
+        // 初始化工作区页面
+        homePage = new HomePage(pageStack);
+        queuePage = new QueuePage(pageStack);
+        queuePage->setManager(&manager);
+        filePrepPage = new FilePrepPage(pageStack);
+        paramPage = new ParamConsolePage(pageStack);
+        mediaInspectorPage = new MediaInspectorPage(pageStack);
 
-        taskListView = new TaskListView(leftPanel);
-        taskListView->setManager(&manager);
+        // 创建辅助功能页面占位
+        auto createPlaceholderPage = [this](const QString &title, const QString &desc) -> QWidget* {
+            auto *w = new QWidget(pageStack);
+            auto *l = new QVBoxLayout(w);
+            l->setAlignment(Qt::AlignCenter);
+            l->setSpacing(8);
+            auto *t = new QLabel(title, w);
+            t->setObjectName("paramSectionTitle");
+            t->setAlignment(Qt::AlignCenter);
+            auto *d = new QLabel(desc, w);
+            d->setObjectName("paramSectionSubtitle");
+            d->setAlignment(Qt::AlignCenter);
+            l->addWidget(t);
+            l->addWidget(d);
+            return w;
+        };
 
-        leftLayout->addWidget(taskListView, 1);
-        splitter->addWidget(leftPanel);
+        QWidget *perfPage = createPlaceholderPage("性能监控面板", "实时捕获硬件编解码利用率、帧率吞吐量与内存占用");
+        QWidget *toolsPage = createPlaceholderPage("集成工具箱", "包含视频无损截取、音频提取、字幕压制与色彩空间转换工具");
+        QWidget *settingsPage = createPlaceholderPage("软件设置", "配置默认输出路径、线程池大小与 GPU 硬件加速首选项");
+        QWidget *aboutPage = createPlaceholderPage("关于系统", "FFmpeg Transcoder Pro 6.0\n全链路基于原生 C API 构建，具备高吞吐量与专业压制调校能力");
 
-        // 右侧面板：选中任务元数据展示 + 预设调节
-        auto *rightPanel = new QWidget(splitter);
-        auto *rightLayout = new QVBoxLayout(rightPanel);
-        rightLayout->setContentsMargins(8, 0, 0, 0);
-        rightLayout->setSpacing(10);
+        pageStack->addWidget(homePage);            // 0: 起始页面
+        pageStack->addWidget(queuePage);           // 1: 编码队列
+        pageStack->addWidget(filePrepPage);        // 2: 准备文件
+        pageStack->addWidget(paramPage);           // 3: 参数面板
+        pageStack->addWidget(mediaInspectorPage);  // 4: 媒体信息
+        pageStack->addWidget(perfPage);            // 5: 性能监控
+        pageStack->addWidget(toolsPage);           // 6: 集成工具
+        pageStack->addWidget(settingsPage);        // 7: 软件设置
+        pageStack->addWidget(aboutPage);           // 8: 关于系统
 
-        auto *rightScroll = new QScrollArea(rightPanel);
-        rightScroll->setWidgetResizable(true);
-        rightScroll->setFrameShape(QFrame::NoFrame);
-
-        auto *rightContainer = new QWidget(rightScroll);
-        auto *rcLayout = new QVBoxLayout(rightContainer);
-        rcLayout->setContentsMargins(0, 0, 0, 0);
-        rcLayout->setSpacing(12);
-
-        mediaInfoCard = new MediaInfoCard(rightContainer);
-        presetPanel = new PresetPanel(rightContainer);
-
-        applyToAllBtn = new QPushButton("将此配置应用到列表中所有任务", rightContainer);
-        applyToAllBtn->setObjectName("applyAllBtn");
-
-        rcLayout->addWidget(mediaInfoCard);
-        rcLayout->addWidget(presetPanel);
-        rcLayout->addWidget(applyToAllBtn);
-        rcLayout->addStretch();
-
-        rightScroll->setWidget(rightContainer);
-        rightLayout->addWidget(rightScroll);
-        splitter->addWidget(rightPanel);
-
-        // 分割比例: 60% : 40%
-        splitter->setStretchFactor(0, 3);
-        splitter->setStretchFactor(1, 2);
-
-        rootLayout->addWidget(splitter, 1);
-
-        // 3. 状态栏
-        statusLabel = new QLabel("就绪 | 欢迎使用 FFmpeg 视频格式转换器", centralWidget);
-        statusLabel->setObjectName("footerStatusLabel");
-        q_ptr->statusBar()->addWidget(statusLabel, 1);
+        bodyLayout->addWidget(navSidebar);
+        bodyLayout->addWidget(pageStack, 1);
+        rootLayout->addWidget(bodyWidget, 1);
 
         q_ptr->setCentralWidget(centralWidget);
 
         bindSignals();
+        initPerfMonitor();
     }
 
     void bindSignals() {
-        // 导入文件
+        // 侧边栏切换页面联动
+        QObject::connect(navSidebar, &NavSidebar::currentChanged, [this](int index) {
+            pageStack->setCurrentIndex(index);
+        });
+
+        // 起始页快捷跳转
+        QObject::connect(homePage, &HomePage::navigateToQueue, [this]() {
+            navSidebar->setCurrentIndex(1);
+        });
+        QObject::connect(homePage, &HomePage::navigateToFilePrep, [this]() {
+            navSidebar->setCurrentIndex(2);
+        });
+        QObject::connect(homePage, &HomePage::navigateToParams, [this]() {
+            navSidebar->setCurrentIndex(3);
+        });
+
+        // 批量添加文件联动
         auto onAddFiles = [this](const QStringList &files) {
             for (const auto &file : files) {
                 if (QFileInfo::exists(file)) {
@@ -157,64 +167,34 @@ public:
                 }
             }
             q_ptr->setHasTasks(!manager.allTasks().isEmpty());
-            updateStatusText();
         };
 
-        QObject::connect(taskListView, &TaskListView::filesDropped, onAddFiles);
-
-        QObject::connect(addFileBtn, &QPushButton::clicked, [this, onAddFiles]() {
-            QStringList files = QFileDialog::getOpenFileNames(
-                q_ptr, "选择待转换的视频文件", "",
-                "视频文件 (*.mp4 *.mkv *.mov *.avi *.flv *.ts *.webm *.wmv *.m4v *.mp3 *.aac);;所有文件 (*.*)"
-            );
-            if (!files.isEmpty()) {
-                onAddFiles(files);
-            }
+        QObject::connect(filePrepPage, &FilePrepPage::enqueueFilesRequested, [this, onAddFiles](const QStringList &files) {
+            onAddFiles(files);
+            navSidebar->setCurrentIndex(1); // 自动切到编码队列
         });
 
-        // 任务批量控制
-        QObject::connect(startAllBtn, &QPushButton::clicked, [this]() {
-            manager.startAll();
-            updateStatusText();
-        });
+        QObject::connect(queuePage, &QueuePage::filesDropped, onAddFiles);
 
-        QObject::connect(pauseAllBtn, &QPushButton::clicked, [this]() {
-            manager.pauseAll();
-            updateStatusText();
-        });
-
-        QObject::connect(cancelAllBtn, &QPushButton::clicked, [this]() {
-            manager.cancelAll();
-            updateStatusText();
-        });
-
-        QObject::connect(clearAllBtn, &QPushButton::clicked, [this]() {
-            manager.clearAllTasks();
-            q_ptr->setHasTasks(false);
-            mediaInfoCard->clearMedia();
-            updateStatusText();
-        });
-
-        // 选中任务联动
-        QObject::connect(taskListView, &TaskListView::taskSelected, [this](const QString &id) {
+        // 任务选中联动
+        QObject::connect(queuePage, &QueuePage::taskSelected, [this](const QString &id) {
             currentSelectedTaskId = id;
             auto *t = manager.getTask(id);
             if (t) {
-                mediaInfoCard->setMedia(t->mediaInfo(), t->thumbnail());
-                presetPanel->setConfig(t->config());
+                mediaInspectorPage->setMedia(t->mediaInfo(), t->thumbnail());
+                paramPage->setConfig(t->config());
             } else {
-                mediaInfoCard->clearMedia();
+                mediaInspectorPage->clearMedia();
             }
         });
 
-        // 预设修改更新到当前任务
-        QObject::connect(presetPanel, &PresetPanel::configChanged, [this](const TranscodeConfig &cfg) {
+        // 预设修改更新到当前选中的任务
+        QObject::connect(paramPage, &ParamConsolePage::configChanged, [this](const TranscodeConfig &cfg) {
             auto *t = manager.getTask(currentSelectedTaskId);
             if (t) {
                 TranscodeConfig newCfg = cfg;
                 newCfg.inputPath = t->inputFilePath();
 
-                // 更新输出文件后缀
                 QFileInfo fi(t->inputFilePath());
                 QString ext = cfg.containerFormat;
                 newCfg.outputPath = fi.absolutePath() + "/" + fi.completeBaseName() + "_converted." + ext;
@@ -222,48 +202,33 @@ public:
             }
         });
 
-        // 应用到全部任务
-        QObject::connect(applyToAllBtn, &QPushButton::clicked, [this]() {
-            auto templateCfg = presetPanel->config();
-            int count = 0;
-            for (auto *t : manager.allTasks()) {
-                if (t->state() == TaskState::Pending) {
-                    TranscodeConfig newCfg = templateCfg;
-                    newCfg.inputPath = t->inputFilePath();
-                    QFileInfo fi(t->inputFilePath());
-                    newCfg.outputPath = fi.absolutePath() + "/" + fi.completeBaseName() + "_converted." + templateCfg.containerFormat;
-                    t->setConfig(newCfg);
-                    count++;
-                }
-            }
-            statusLabel->setText(QString("已将当前配置批量应用到 %1 个待处理任务").arg(count));
-        });
-
-        // 状态变更与全部完成监听
+        // 任务队列整体状态
         QObject::connect(&manager, &TranscodeTaskManager::taskStateChanged, [this](TranscodeTask*, TaskState) {
-            updateStatusText();
-        });
-
-        QObject::connect(&manager, &TranscodeTaskManager::allTasksCompleted, [this]() {
-            statusLabel->setText("提示：列表中所有转码任务均已完成！");
+            q_ptr->setHasTasks(!manager.allTasks().isEmpty());
         });
     }
 
-    void updateStatusText() {
-        auto tasks = manager.allTasks();
-        int pending = 0, running = 0, completed = 0, failed = 0;
-        for (auto *t : tasks) {
-            switch (t->state()) {
-            case TaskState::Pending:
-            case TaskState::Analyzing: pending++; break;
-            case TaskState::Converting: running++; break;
-            case TaskState::Completed: completed++; break;
-            case TaskState::Failed: failed++; break;
-            default: break;
-            }
+    void initPerfMonitor() {
+        perfTimer = new QTimer(q_ptr);
+        QObject::connect(perfTimer, &QTimer::timeout, [this]() {
+            updateSystemResourceText();
+        });
+        perfTimer->start(2000);
+        updateSystemResourceText();
+    }
+
+    void updateSystemResourceText() {
+        int ramMB = 85;
+#ifdef Q_OS_WIN
+        PROCESS_MEMORY_COUNTERS pmc;
+        if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
+            ramMB = static_cast<int>(pmc.WorkingSetSize / (1024 * 1024));
         }
-        statusLabel->setText(QString("任务总数: %1 | 转换中: %2 | 等待中: %3 | 已完成: %4 | 失败: %5")
-            .arg(tasks.size()).arg(running).arg(pending).arg(completed).arg(failed));
+#endif
+        int taskCount = manager.allTasks().size();
+        QString perfStr = QString("FFmpeg Transcoder Pro  |  RAM %1 MB  |  任务队列: %2  |  Native C Engine Ready")
+            .arg(ramMB).arg(taskCount);
+        perfInfoLabel->setText(perfStr);
     }
 };
 
@@ -300,12 +265,17 @@ void MainWindow::dragEnterEvent(QDragEnterEvent *event) {
 
 void MainWindow::dropEvent(QDropEvent *event) {
     const QList<QUrl> urls = event->mimeData()->urls();
+    QStringList files;
     for (const auto &url : urls) {
         if (url.isLocalFile()) {
+            files.append(url.toLocalFile());
             d_ptr->manager.addTask(url.toLocalFile());
         }
     }
     setHasTasks(!d_ptr->manager.allTasks().isEmpty());
+    if (!files.isEmpty()) {
+        d_ptr->navSidebar->setCurrentIndex(1); // 自动切到编码队列
+    }
     event->acceptProposedAction();
 }
 

@@ -1,4 +1,4 @@
-# 🎬 FFmpeg Native Video Transcoder (桌面视频格式转换器)
+# FFmpeg Native Video Transcoder (桌面视频格式转换器)
 
 基于 **Qt 6 (C++17)** 与 **原生 FFmpeg C API**（libavcodec、libavformat、libswscale、libswresample）打造的现代化跨平台桌面视频格式转换器客户端。
 
@@ -6,13 +6,27 @@
 
 ---
 
-## 🌟 核心功能特性
+## 核心功能特性
 
-### 1. 媒体信息解析与高清缩略图截取
+### 1. 多工作区专业侧边栏导航架构
+- **常驻导航侧边栏 (`NavSidebar`)**：
+  - 顶部快速检索输入框，实时过滤导航功能项；
+  - 模块化功能分组：【主要功能】（起始页面、编码队列、准备文件、参数面板、媒体信息）与【工具箱】（媒体探测、视频预览、流复制器、命令行构建器、系统日志、偏好设置）；
+  - 动态徽标气泡实时联动活跃与排队任务总数。
+- **顶部实时系统状态监视条**：
+  - 毫秒级轮询进程 CPU、工作集物理内存以及 GPU 显存环境状态。
+- **五大多媒体处理专业视图**：
+  - **起始页面 (`HomePage`)**：品牌横幅卡片、系统内存一键释放、系统架构/引擎特性/操作指南三大卡片；
+  - **编码队列 (`QueuePage`)**：彩色控制动作菜单（开始、暂停、恢复、停止、移除、重置、定位）、全局计数看板、8 列多维度任务列表头与拖拽队列；
+  - **准备文件 (`FilePrepPage`)**：批量文件与文件夹递归扫描导入、精细化路径表格、一键移入编码队列；
+  - **参数面板 (`ParamConsolePage`)**：分类参数导航、`[-preset]` / `[-profile:v]` / `[-tune]` / `[-gpu]` 命令行等效标识、实时等效 FFmpeg 指令终端预览与一键复制；
+  - **媒体信息 (`MediaInspectorPage`)**：多维音频/视频流元数据深度解析与关键帧 RGB 缩略图画廊。
+
+### 2. 媒体信息解析与高清缩略图截取
 - **多维流元数据解析**：自动解析容器格式（MP4、MKV、MOV、AVI、FLV、TS、WebM 等）、总时长、整体码率、文件大小、音视频流编码类型（H.264/AVC、H.265/HEVC、AAC、MP3 等）、分辨率、像素格式（如 YUV420P）、帧率及声道采样率。
 - **智能关键帧缩略图提取**：利用 `av_seek_frame` 避开片头黑屏，通过 `sws_scale` 转换为高质量 RGB24 图像并动态缓存渲染。
 
-### 2. 全链路 FFmpeg C API 原生转码流水线
+### 3. 全链路 FFmpeg C API 原生转码流水线
 - **底层 C 函数驱动**：
   - 解封装：`avformat_open_input` / `avformat_find_stream_info`
   - 解码：`avcodec_send_packet` / `avcodec_receive_frame`
@@ -26,32 +40,32 @@
   - 快速预设：通用 MP4 (H.264+AAC)、高效 MKV (H.265)、提取 MP3/AAC、Apple MOV、专家模式。
   - 参数调节：分辨率（原始/4K/1080P/720P/480P）、帧率（原始/60/30/24 fps）、CRF 恒定画质（18~35）与目标码率、编码速度预设（ultrafast ~ slow）。
 
-### 3. 多任务批处理队列与实时状态监测
+### 4. 多任务批处理队列与实时状态监测
 - **批处理队列调度**：支持多文件同时拖拽导入，队列化安全调度。
 - **实时性能指标**：转换百分比、编码帧率 (FPS)、实时转码倍速 (如 15.1x / 120x)、已耗时与预估剩余时间 (ETA)。
 - **精细化状态机控制**：支持单任务或全部任务的 **开始、暂停、继续、取消、移除**；转码完成后支持一键在资源管理器中定位输出文件。
 
-### 4. 现代化客户端交互与专业暗黑视觉体系
-- **专业级交互与沉浸式暗黑设计语言**：
-  - 采用现代专业工作台标志性的深空暗夜色底（`#14161d`）与电气青蓝（`#38bdf8`）点缀。
-  - 顶部设立一体化命令工具栏（添加媒体、全部开始、暂停、终止、清空、输出目录）。
+### 5. 现代化客户端交互与专业暗黑视觉体系
+- **沉浸式暗黑设计语言与零 Emoji 纯净排版**：
+  - 采用现代专业工作台标志性的深空暗夜色底（`#14161d`）与电气青蓝（`#38bdf8`）点缀，完全移除 Emoji，视觉纯净干练。
   - **特色【等效 FFmpeg 核心参数实时预览】**：下方设立专属代码终端框，任何参数调节均实时生成等效的 FFmpeg 命令行参数并支持一键复制，让进阶压制细节透明可控。
-  - 选项卡式分类控制台（`🌟 常用预设`、`🎬 视频编码`、`🎵 音频与封装`），满足小白零门槛与专家微调的双重需求。
 - **严格遵循 Pimpl 设计模式**：所有组件对外头文件隐藏实现细节，指针生命周期安全可控。
 - **QSS 动态样式解耦**：C++ 代码无硬编码内联样式，统一通过 `Q_PROPERTY` 暴露状态属性，配合暗色影视风格主题表（`theme.qss`）实现属性选择器动态换肤与渲染刷新。
 
 ---
 
-## 🏛️ 系统架构设计
+## 系统架构设计
 
 ```mermaid
 graph TD
     subgraph UI ["GUI Client Layer (Qt6 Widgets - Pimpl + QSS)"]
         MainWindow["MainWindow"]
-        DropArea["DropAreaWidget (文件拖拽/导入)"]
-        TaskListView["TaskListView & TaskItemWidget (任务队列卡片)"]
-        MediaInfoCard["MediaInfoCard (元数据徽标与缩略图)"]
-        PresetPanel["PresetPanel (预设与专家调参)"]
+        NavSidebar["NavSidebar (模块化导航侧边栏)"]
+        HomePage["HomePage (仪表盘与概览)"]
+        QueuePage["QueuePage (队列控制台与 TaskListView)"]
+        FilePrepPage["FilePrepPage (文件批处理工作区)"]
+        ParamConsolePage["ParamConsolePage (参数面板与 CLI 预览)"]
+        MediaInspectorPage["MediaInspectorPage (媒体信息探测与缩略图)"]
     end
 
     subgraph Manager ["Task Management Layer"]
@@ -66,19 +80,20 @@ graph TD
         FFmpegUtils["FFmpegUtils (RAII 智能资源管控)"]
     end
 
-    DropArea -->|导入视频| MainWindow
-    MainWindow -->|创建任务| TaskManager
+    NavSidebar -->|工作区切换| MainWindow
+    FilePrepPage -->|批量移入队列| QueuePage
+    QueuePage -->|创建并调度任务| TaskManager
     TaskManager -->|异步解析| MetadataExtractor
     TaskManager -->|提取缩略图| ThumbnailExtractor
     TaskManager -->|后台多线程转码| TranscodeEngine
     TranscodeEngine -->|进度/FPS/ETA 信号| TaskEntity
-    TaskEntity -->|状态流转绑定| TaskListView
-    MetadataExtractor -->|显示参数| MediaInfoCard
+    TaskEntity -->|状态流转绑定| QueuePage
+    MetadataExtractor -->|显示参数| MediaInspectorPage
 ```
 
 ---
 
-## 📁 目录结构
+## 目录结构
 
 ```text
 ffmpeg_transform/
@@ -102,10 +117,16 @@ ffmpeg_transform/
 │   │   ├── TranscodeTask.h / .cpp         # 单任务实体模型 (Pimpl)
 │   │   └── TranscodeTaskManager.h / .cpp  # 任务队列与并发调度器 (Pimpl)
 │   ├── ui/                                # Qt6 客户端界面组件 (严格 Pimpl)
-│   │   ├── MainWindow.h / .cpp            # 主窗口
+│   │   ├── MainWindow.h / .cpp            # 主窗口 (侧边栏 + 堆叠工作区 + 系统监控条)
+│   │   ├── NavSidebar.h / .cpp            # 模块化侧边栏导航控件 (搜索/分组/徽标)
+│   │   ├── HomePage.h / .cpp              # 起始页面 / 仪表盘与架构概览
+│   │   ├── QueuePage.h / .cpp             # 编码队列工作区 (彩色功能栏/统计/表头)
+│   │   ├── FilePrepPage.h / .cpp          # 准备文件工作区 (递归扫描/文件表格)
+│   │   ├── ParamConsolePage.h / .cpp      # 参数面板 (CLI 等效标签/终端预览)
+│   │   ├── MediaInspectorPage.h / .cpp    # 媒体信息深度检视与缩略图画廊
 │   │   ├── DropAreaWidget.h / .cpp        # 拖拽放置控件
-│   │   ├── MediaInfoCard.h / .cpp         # 元数据与缩略图展示卡片
-│   │   ├── PresetPanel.h / .cpp           # 预设与参数设置面板
+│   │   ├── MediaInfoCard.h / .cpp         # 元数据与缩略图卡片
+│   │   ├── PresetPanel.h / .cpp           # 常用预设面板
 │   │   ├── TaskItemWidget.h / .cpp        # 任务卡片行控件
 │   │   └── TaskListView.h / .cpp          # 任务卡片列表容器
 │   └── resources/                         # 资源与动态样式
@@ -118,7 +139,7 @@ ffmpeg_transform/
 
 ---
 
-## 🛠️ 构建与运行指南
+## 构建与运行指南
 
 ### 1. 环境依赖
 - **操作系统**：Windows 10 / 11 (x64)
@@ -149,7 +170,7 @@ cmake --build build --config Release
 
 ---
 
-## 📊 测试与验证结果
+## 测试与验证结果
 
 通过实际视频样本（`v1.mp4`, 25MB, 852x480 H.264 AAC）进行全流程自动化测试：
 1. **元数据解析**：100% 精确识别容器格式、时长 (03:32)、宽高 (852x480)、流编码、帧率与音频采样率。

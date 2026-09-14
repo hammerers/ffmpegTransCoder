@@ -542,3 +542,326 @@ QSplitter::handle {
 QSplitter::handle:hover {
     background-color: #0ea5e9;
 }
+
+/* ===================================================================
+   多工作区侧边栏与页面架构样式扩展 (无外部项目引用)
+   =================================================================== */
+
+/* 顶部性能监视与系统条 */
+#topInfoBar {
+    background-color: #17181c;
+    border-bottom: 1px solid #23242a;
+}
+
+#topAppIcon {
+    font-size: 11px;
+    font-weight: 800;
+    color: #e2e8f0;
+    background-color: #2b2d35;
+    border-radius: 4px;
+    padding: 3px 8px;
+    letter-spacing: 0.5px;
+}
+
+#topPerfLabel {
+    color: #8e94a5;
+    font-family: "Consolas", "Cascadia Code", monospace;
+    font-size: 12px;
+}
+
+#topStatusBadge {
+    background-color: #163828;
+    color: #4ade80;
+    border: 1px solid #22c55e;
+    font-size: 11px;
+    font-weight: bold;
+    border-radius: 4px;
+    padding: 2px 8px;
+}
+
+/* 纵向导航侧边栏 */
+#navSidebar {
+    background-color: #17181c;
+    border-right: 1px solid #23242a;
+}
+
+#navSearchEdit {
+    background-color: #202228;
+    border: 1px solid #2b2d36;
+    border-radius: 6px;
+    color: #e2e8f0;
+    padding: 6px 10px;
+    font-size: 12px;
+}
+
+#navSearchEdit:focus {
+    border-color: #38bdf8;
+}
+
+#navSeparator {
+    color: #262830;
+    background-color: #262830;
+    max-height: 1px;
+}
+
+#navItemBtn {
+    background-color: transparent;
+    color: #9499a8;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 12px;
+    text-align: left;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+#navItemBtn:hover {
+    background-color: #22242c;
+    color: #f1f5f9;
+}
+
+#navItemBtn[isActive="true"] {
+    background-color: #313542;
+    color: #ffffff;
+    font-weight: bold;
+    border-left: 3px solid #38bdf8;
+}
+
+/* 起始页面 / 仪表盘 */
+#homeContainer {
+    background-color: #121316;
+}
+
+#homeBannerCard {
+    background-color: #1a1c22;
+    border: 1px solid #262832;
+    border-radius: 8px;
+}
+
+#homeBannerIcon {
+    font-size: 12px;
+    font-weight: 900;
+    color: #f1f5f9;
+    background-color: #3b3f4d;
+    border-radius: 6px;
+    padding: 8px 12px;
+}
+
+#homeBannerTitle {
+    font-size: 18px;
+    font-weight: 800;
+    color: #f8fafc;
+}
+
+#homeBannerSubtitle {
+    font-size: 12px;
+    color: #64748b;
+}
+
+#homeCleanBtn {
+    background-color: #272a33;
+    color: #cbd5e1;
+    border: 1px solid #363b47;
+    border-radius: 6px;
+    padding: 6px 14px;
+}
+
+#homeCleanBtn:hover {
+    background-color: #323642;
+    color: #ffffff;
+}
+
+#homeCard {
+    background-color: #181a20;
+    border: 1px solid #242630;
+    border-radius: 8px;
+}
+
+#homeCardHeader {
+    font-size: 14px;
+    font-weight: 700;
+    color: #38bdf8;
+    border-bottom: 1px solid #242630;
+    padding-bottom: 6px;
+}
+
+#homeCardItem {
+    font-size: 12px;
+    color: #94a3b8;
+    line-height: 1.4;
+}
+
+#homeCardActionBtn {
+    background-color: transparent;
+    color: #0ea5e9;
+    border: none;
+    text-align: left;
+    font-weight: bold;
+    font-size: 12px;
+    padding: 4px 0;
+}
+
+#homeCardActionBtn:hover {
+    color: #38bdf8;
+    text-decoration: underline;
+}
+
+/* 编码队列页面 */
+#queueMenuBar {
+    background-color: transparent;
+    border-bottom: 1px solid #242630;
+}
+
+#queueMenuTitle {
+    font-size: 14px;
+    font-weight: 700;
+    color: #38bdf8;
+}
+
+#btnActionStart { color: #22c55e; font-weight: bold; }
+#btnActionStart:hover { color: #4ade80; text-decoration: underline; }
+
+#btnActionPause { color: #eab308; font-weight: bold; }
+#btnActionPause:hover { color: #fde047; text-decoration: underline; }
+
+#btnActionResume { color: #06b6d4; font-weight: bold; }
+#btnActionResume:hover { color: #22d3ee; text-decoration: underline; }
+
+#btnActionStop { color: #ef4444; font-weight: bold; }
+#btnActionStop:hover { color: #f87171; text-decoration: underline; }
+
+#btnActionRemove { color: #f43f5e; font-weight: bold; }
+#btnActionRemove:hover { color: #fb7185; text-decoration: underline; }
+
+#btnActionReset { color: #f97316; font-weight: bold; }
+#btnActionReset:hover { color: #fb923c; text-decoration: underline; }
+
+#btnActionLocate { color: #a855f7; font-weight: bold; }
+#btnActionLocate:hover { color: #c084fc; text-decoration: underline; }
+
+#statTotalLabel { color: #94a3b8; font-size: 12px; font-weight: bold; }
+#statRunningLabel { color: #22c55e; font-size: 12px; font-weight: bold; }
+#statErrorLabel { color: #ef4444; font-size: 12px; font-weight: bold; }
+
+#queueTableHeader {
+    background-color: #17181e;
+    border-bottom: 1px solid #262832;
+}
+
+#queueHeaderCol {
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+}
+
+/* 准备文件页面 */
+#btnPrimaryPrep {
+    background-color: #0284c7;
+    color: #ffffff;
+    border: 1px solid #0ea5e9;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-weight: bold;
+}
+
+#btnPrimaryPrep:hover {
+    background-color: #0369a1;
+}
+
+#prepFileTable {
+    background-color: #17181e;
+    border: 1px solid #262832;
+    border-radius: 6px;
+    gridline-color: #242630;
+    color: #e2e8f0;
+}
+
+#prepFileTable::item {
+    padding: 6px 8px;
+}
+
+#prepFileTable::item:selected {
+    background-color: #1e3a5f;
+    color: #ffffff;
+}
+
+#prepBottomHint {
+    font-size: 12px;
+    color: #64748b;
+    padding: 6px 4px;
+}
+
+/* 参数面板页面 */
+#paramSubSidebar {
+    background-color: #15161a;
+    border-right: 1px solid #242630;
+}
+
+#paramSubSep {
+    color: #242630;
+    background-color: #242630;
+    max-height: 1px;
+}
+
+#paramSubBtn {
+    background-color: transparent;
+    color: #9499a8;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 8px;
+    text-align: left;
+    font-size: 12px;
+}
+
+#paramSubBtn:hover {
+    background-color: #20222a;
+    color: #f1f5f9;
+}
+
+#paramSubBtn[active="true"] {
+    background-color: #2f3442;
+    color: #ffffff;
+    font-weight: bold;
+}
+
+#paramSectionTitle {
+    font-size: 14px;
+    font-weight: 700;
+    color: #f8fafc;
+}
+
+#paramSectionSubtitle {
+    font-size: 11px;
+    color: #64748b;
+}
+
+#paramTagBadge {
+    background-color: #20222a;
+    color: #38bdf8;
+    font-family: "Consolas", "Cascadia Code", monospace;
+    font-size: 11px;
+    font-weight: bold;
+    border: 1px solid #2c303c;
+    border-radius: 4px;
+    padding: 4px 6px;
+}
+
+#btnCopyCmd {
+    background-color: #1e2433;
+    border: 1px solid #333d54;
+    color: #38bdf8;
+    border-radius: 4px;
+    padding: 3px 10px;
+    font-size: 11px;
+}
+
+#btnCopyCmd:hover {
+    background-color: #2b354d;
+}
+
+#inspectorPageTitle {
+    font-size: 15px;
+    font-weight: 700;
+    color: #38bdf8;
+}
+

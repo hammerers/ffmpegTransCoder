@@ -78,6 +78,18 @@ add_executable(FFmpegVideoTransform WIN32
     src/main.cpp
     src/ui/MainWindow.h
     src/ui/MainWindow.cpp
+    src/ui/NavSidebar.h
+    src/ui/NavSidebar.cpp
+    src/ui/HomePage.h
+    src/ui/HomePage.cpp
+    src/ui/QueuePage.h
+    src/ui/QueuePage.cpp
+    src/ui/FilePrepPage.h
+    src/ui/FilePrepPage.cpp
+    src/ui/ParamConsolePage.h
+    src/ui/ParamConsolePage.cpp
+    src/ui/MediaInspectorPage.h
+    src/ui/MediaInspectorPage.cpp
     src/ui/DropAreaWidget.h
     src/ui/DropAreaWidget.cpp
     src/ui/MediaInfoCard.h
