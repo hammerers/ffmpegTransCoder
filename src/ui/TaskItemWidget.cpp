@@ -71,8 +71,8 @@ public:
         progressBar->setFixedHeight(6);
         progressBar->setTextVisible(false);
 
-        statsLabel = new QLabel("0% | --:--", q_ptr);
-        statsLabel->setObjectName("itemStatsLabel");
+        statsLabel = new QLabel("0%  |  --:--  |  0.0x", q_ptr);
+        statsLabel->setObjectName("itemMetricsLabel");
 
         auto *bottomRow = new QHBoxLayout();
         bottomRow->addWidget(progressBar, 1);
@@ -92,7 +92,7 @@ public:
 
         cancelBtn = new QPushButton("⏹️", q_ptr);
         cancelBtn->setObjectName("itemActionBtn");
-        cancelBtn->setToolTip("停止");
+        cancelBtn->setToolTip("终止任务");
 
         openFolderBtn = new QPushButton("📂", q_ptr);
         openFolderBtn->setObjectName("itemActionBtn");
@@ -166,7 +166,7 @@ public:
 
     void updateProgress(const TranscodeProgress &p) {
         progressBar->setValue(static_cast<int>(p.percent));
-        QString statsText = QString("%1% | 速率: %2 | ETA: %3 | FPS: %4")
+        QString statsText = QString("%1%  |  速率: %2  |  ETA: %3  |  %4 FPS")
             .arg(static_cast<int>(p.percent))
             .arg(p.formattedSpeed())
             .arg(p.formattedEta())
@@ -178,7 +178,7 @@ public:
         state = s;
         switch (s) {
         case TaskState::Pending:
-            statusBadge->setText("等待中");
+            statusBadge->setText("等待压制");
             statusBadge->setProperty("status", "pending");
             pauseResumeBtn->setEnabled(false);
             cancelBtn->setEnabled(false);
@@ -192,7 +192,7 @@ public:
             openFolderBtn->setVisible(false);
             break;
         case TaskState::Converting:
-            statusBadge->setText("转换中");
+            statusBadge->setText("压制中");
             statusBadge->setProperty("status", "converting");
             pauseResumeBtn->setEnabled(true);
             pauseResumeBtn->setText("⏸️");
@@ -208,10 +208,10 @@ public:
             openFolderBtn->setVisible(false);
             break;
         case TaskState::Completed:
-            statusBadge->setText("已完成");
+            statusBadge->setText("压制完成");
             statusBadge->setProperty("status", "completed");
             progressBar->setValue(100);
-            statsLabel->setText("100% | 转换成功");
+            statsLabel->setText("100%  |  压制成功");
             pauseResumeBtn->setVisible(false);
             cancelBtn->setVisible(false);
             openFolderBtn->setVisible(true);
@@ -219,15 +219,15 @@ public:
         case TaskState::Failed:
             statusBadge->setText("失败");
             statusBadge->setProperty("status", "failed");
-            statsLabel->setText("转换失败: " + task->errorMessage());
+            statsLabel->setText("压制失败: " + task->errorMessage());
             pauseResumeBtn->setVisible(false);
             cancelBtn->setVisible(false);
             openFolderBtn->setVisible(false);
             break;
         case TaskState::Canceled:
-            statusBadge->setText("已取消");
+            statusBadge->setText("已终止");
             statusBadge->setProperty("status", "canceled");
-            statsLabel->setText("已取消");
+            statsLabel->setText("已终止");
             pauseResumeBtn->setVisible(false);
             cancelBtn->setVisible(false);
             openFolderBtn->setVisible(false);

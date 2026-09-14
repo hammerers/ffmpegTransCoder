@@ -44,8 +44,8 @@ public:
 
     void initUI() {
         q_ptr->setObjectName("mainWindow");
-        q_ptr->setWindowTitle("FFmpeg 视频格式转换器 - 专业桌面客户端 (Native C API)");
-        q_ptr->resize(1150, 750);
+        q_ptr->setWindowTitle("FFmpeg 专业视频格式转换器 - 桌面客户端 (Native C API)");
+        q_ptr->resize(1180, 760);
         q_ptr->setMinimumSize(950, 600);
         q_ptr->setAcceptDrops(true);
 
@@ -54,36 +54,51 @@ public:
         rootLayout->setContentsMargins(16, 16, 16, 16);
         rootLayout->setSpacing(12);
 
-        // 1. 顶部工具栏
-        auto *headerLayout = new QHBoxLayout();
-        headerLayout->setSpacing(10);
+        // 1. 顶部一体化命令工具栏
+        auto *headerWidget = new QWidget(centralWidget);
+        headerWidget->setObjectName("topBarWidget");
+        auto *headerLayout = new QHBoxLayout(headerWidget);
+        headerLayout->setContentsMargins(8, 4, 8, 4);
+        headerLayout->setSpacing(8);
 
-        auto *titleLabel = new QLabel("🎬 FFmpeg Native Transcoder", centralWidget);
-        titleLabel->setObjectName("appTitleLabel");
+        auto *logoLabel = new QLabel("🎬 FFmpeg Transcoder Pro", headerWidget);
+        logoLabel->setObjectName("brandLogoLabel");
 
-        addFileBtn = new QPushButton("➕ 添加视频", centralWidget);
-        addFileBtn->setObjectName("primaryActionBtn");
+        auto *verBadge = new QLabel("Native C API", headerWidget);
+        verBadge->setObjectName("brandVersionBadge");
 
-        startAllBtn = new QPushButton("🚀 全部开始", centralWidget);
-        startAllBtn->setObjectName("accentActionBtn");
+        auto *sloganLabel = new QLabel("· 专业级音视频压制工具", headerWidget);
+        sloganLabel->setObjectName("brandSloganLabel");
 
-        pauseAllBtn = new QPushButton("⏸️ 全部暂停", centralWidget);
-        pauseAllBtn->setObjectName("secondaryActionBtn");
+        addFileBtn = new QPushButton("➕ 添加媒体", headerWidget);
+        addFileBtn->setObjectName("btnPrimary");
+        addFileBtn->setCursor(Qt::PointingHandCursor);
 
-        cancelAllBtn = new QPushButton("⏹️ 全部停止", centralWidget);
-        cancelAllBtn->setObjectName("secondaryActionBtn");
+        startAllBtn = new QPushButton("🚀 全部开始", headerWidget);
+        startAllBtn->setObjectName("btnSuccess");
+        startAllBtn->setCursor(Qt::PointingHandCursor);
 
-        clearAllBtn = new QPushButton("🗑️ 清空列表", centralWidget);
-        clearAllBtn->setObjectName("dangerActionBtn");
+        pauseAllBtn = new QPushButton("⏸️ 暂停全部", headerWidget);
+        pauseAllBtn->setObjectName("btnWarning");
+        pauseAllBtn->setCursor(Qt::PointingHandCursor);
 
-        headerLayout->addWidget(titleLabel);
+        cancelAllBtn = new QPushButton("⏹️ 终止全部", headerWidget);
+        cancelAllBtn->setObjectName("btnDanger");
+        cancelAllBtn->setCursor(Qt::PointingHandCursor);
+
+        clearAllBtn = new QPushButton("🗑️ 清空队列", headerWidget);
+        clearAllBtn->setCursor(Qt::PointingHandCursor);
+
+        headerLayout->addWidget(logoLabel);
+        headerLayout->addWidget(verBadge);
+        headerLayout->addWidget(sloganLabel);
         headerLayout->addStretch();
         headerLayout->addWidget(addFileBtn);
         headerLayout->addWidget(startAllBtn);
         headerLayout->addWidget(pauseAllBtn);
         headerLayout->addWidget(cancelAllBtn);
         headerLayout->addWidget(clearAllBtn);
-        rootLayout->addLayout(headerLayout);
+        rootLayout->addWidget(headerWidget);
 
         // 2. 主体左右分栏
         auto *splitter = new QSplitter(Qt::Horizontal, centralWidget);
