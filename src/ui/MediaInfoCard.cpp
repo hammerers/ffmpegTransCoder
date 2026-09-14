@@ -39,7 +39,7 @@ public:
         placeholderWidget = new QWidget(q_ptr);
         auto *phLayout = new QVBoxLayout(placeholderWidget);
         phLayout->setAlignment(Qt::AlignCenter);
-        auto *phLabel = new QLabel("👈 请在左侧选择视频以查看详细信息与设置参数", placeholderWidget);
+        auto *phLabel = new QLabel("请在左侧选择视频以查看详细信息与设置参数", placeholderWidget);
         phLabel->setObjectName("cardPlaceholderLabel");
         phLabel->setAlignment(Qt::AlignCenter);
         phLayout->addWidget(phLabel);
@@ -105,7 +105,7 @@ public:
             QPixmap pix = QPixmap::fromImage(thumbnail);
             thumbLabel->setPixmap(pix.scaled(thumbLabel->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
         } else {
-            thumbLabel->setText("🎬 暂无缩略图");
+            thumbLabel->setText("暂无缩略图");
         }
 
         fileNameLabel->setText(info.fileName);

@@ -44,7 +44,7 @@ public:
         thumbLabel->setObjectName("itemThumbLabel");
         thumbLabel->setFixedSize(80, 50);
         thumbLabel->setAlignment(Qt::AlignCenter);
-        thumbLabel->setText("🎬");
+        thumbLabel->setText("");
 
         // 中部详情
         auto *centerLayout = new QVBoxLayout();
@@ -86,20 +86,20 @@ public:
         auto *actionLayout = new QHBoxLayout();
         actionLayout->setSpacing(6);
 
-        pauseResumeBtn = new QPushButton("⏸️", q_ptr);
+        pauseResumeBtn = new QPushButton("暂停", q_ptr);
         pauseResumeBtn->setObjectName("itemActionBtn");
         pauseResumeBtn->setToolTip("暂停/继续");
 
-        cancelBtn = new QPushButton("⏹️", q_ptr);
+        cancelBtn = new QPushButton("终止", q_ptr);
         cancelBtn->setObjectName("itemActionBtn");
         cancelBtn->setToolTip("终止任务");
 
-        openFolderBtn = new QPushButton("📂", q_ptr);
+        openFolderBtn = new QPushButton("打开", q_ptr);
         openFolderBtn->setObjectName("itemActionBtn");
         openFolderBtn->setToolTip("打开所在文件夹");
         openFolderBtn->setVisible(false);
 
-        removeBtn = new QPushButton("❌", q_ptr);
+        removeBtn = new QPushButton("删除", q_ptr);
         removeBtn->setObjectName("itemActionBtn");
         removeBtn->setToolTip("移除任务");
 
@@ -195,7 +195,7 @@ public:
             statusBadge->setText("压制中");
             statusBadge->setProperty("status", "converting");
             pauseResumeBtn->setEnabled(true);
-            pauseResumeBtn->setText("⏸️");
+            pauseResumeBtn->setText("暂停");
             cancelBtn->setEnabled(true);
             openFolderBtn->setVisible(false);
             break;
@@ -203,7 +203,7 @@ public:
             statusBadge->setText("已暂停");
             statusBadge->setProperty("status", "paused");
             pauseResumeBtn->setEnabled(true);
-            pauseResumeBtn->setText("▶️");
+            pauseResumeBtn->setText("继续");
             cancelBtn->setEnabled(true);
             openFolderBtn->setVisible(false);
             break;

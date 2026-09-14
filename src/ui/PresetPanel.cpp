@@ -52,7 +52,7 @@ public:
         tabWidget = new QTabWidget(q_ptr);
         tabWidget->setObjectName("presetTabWidget");
 
-        // ------------------ Tab 1: 🌟 常用预设方案 ------------------
+        // ------------------ Tab 1: 常用预设方案 ------------------
         auto *presetTab = new QWidget(tabWidget);
         auto *presetLayout = new QVBoxLayout(presetTab);
         presetLayout->setContentsMargins(14, 14, 14, 14);
@@ -62,12 +62,12 @@ public:
         pHeader->setObjectName("panelSectionTitle");
 
         presetCombo = new QComboBox(presetTab);
-        presetCombo->addItem("🌟 通用 MP4 (H.264 + AAC) - 极致多端兼容");
-        presetCombo->addItem("⚡ 高效 MKV (H.265/HEVC) - 节省 50% 体积");
-        presetCombo->addItem("🎵 纯音频提取 (MP3 - 192kbps 标准音质)");
-        presetCombo->addItem("🎧 纯音频提取 (AAC - 320kbps 母带级)");
-        presetCombo->addItem("🍎 Apple 影视 (MOV / H.264 原画)");
-        presetCombo->addItem("🛠️ 自定义专家模式 (自由设定所有参数)");
+        presetCombo->addItem("通用 MP4 (H.264 + AAC) - 极致多端兼容");
+        presetCombo->addItem("高效 MKV (H.265/HEVC) - 节省 50% 体积");
+        presetCombo->addItem("纯音频提取 (MP3 - 192kbps 标准音质)");
+        presetCombo->addItem("纯音频提取 (AAC - 320kbps 母带级)");
+        presetCombo->addItem("Apple 影视 (MOV / H.264 原画)");
+        presetCombo->addItem("自定义专家模式 (自由设定所有参数)");
 
         presetDescLabel = new QLabel(presetTab);
         presetDescLabel->setWordWrap(true);
@@ -78,9 +78,9 @@ public:
         presetLayout->addWidget(presetCombo);
         presetLayout->addWidget(presetDescLabel);
         presetLayout->addStretch();
-        tabWidget->addTab(presetTab, "🌟 常用预设");
+        tabWidget->addTab(presetTab, "常用预设");
 
-        // ------------------ Tab 2: 🎬 视频流参数 ------------------
+        // ------------------ Tab 2: 视频流参数 ------------------
         auto *videoTab = new QWidget(tabWidget);
         auto *vLayout = new QVBoxLayout(videoTab);
         vLayout->setContentsMargins(14, 14, 14, 14);
@@ -137,9 +137,9 @@ public:
 
         vLayout->addLayout(vGrid);
         vLayout->addStretch();
-        tabWidget->addTab(videoTab, "🎬 视频编码");
+        tabWidget->addTab(videoTab, "视频编码");
 
-        // ------------------ Tab 3: 🎵 音频与封装 ------------------
+        // ------------------ Tab 3: 音频与封装 ------------------
         auto *audioTab = new QWidget(tabWidget);
         auto *aLayout = new QVBoxLayout(audioTab);
         aLayout->setContentsMargins(14, 14, 14, 14);
@@ -184,7 +184,7 @@ public:
 
         aLayout->addLayout(aGrid);
         aLayout->addStretch();
-        tabWidget->addTab(audioTab, "🎵 音频与封装");
+        tabWidget->addTab(audioTab, "音频与封装");
 
         mainLayout->addWidget(tabWidget);
 
@@ -196,10 +196,10 @@ public:
         previewLayout->setSpacing(4);
 
         auto *previewHeader = new QHBoxLayout();
-        auto *previewTitle = new QLabel("⚡ 等效核心参数实时预览 (Core Args Preview):", previewCard);
+        auto *previewTitle = new QLabel("等效核心参数实时预览 (Core Args Preview):", previewCard);
         previewTitle->setObjectName("cmdPreviewTitle");
 
-        copyCmdBtn = new QPushButton("📋 复制参数", previewCard);
+        copyCmdBtn = new QPushButton("复制参数", previewCard);
         copyCmdBtn->setObjectName("dropBrowseBtn");
         copyCmdBtn->setCursor(Qt::PointingHandCursor);
 
@@ -218,7 +218,7 @@ public:
         // 信号监听
         QObject::connect(copyCmdBtn, &QPushButton::clicked, [this]() {
             QGuiApplication::clipboard()->setText(cmdPreviewEdit->text());
-            copyCmdBtn->setText("✅ 已复制");
+            copyCmdBtn->setText("已复制");
         });
 
         QObject::connect(presetCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [this](int idx) {
@@ -245,7 +245,7 @@ public:
     }
 
     void onPresetChanged(int index) {
-        copyCmdBtn->setText("📋 复制参数");
+        copyCmdBtn->setText("复制参数");
         switch (index) {
         case 0: // 通用 MP4
             formatCombo->setCurrentIndex(0); // mp4
@@ -298,7 +298,7 @@ public:
     }
 
     void notifyChange() {
-        if (copyCmdBtn) copyCmdBtn->setText("📋 复制参数");
+        if (copyCmdBtn) copyCmdBtn->setText("复制参数");
         QString args = q_ptr->generateEquivalentArgs();
         if (cmdPreviewEdit) {
             cmdPreviewEdit->setText(args);

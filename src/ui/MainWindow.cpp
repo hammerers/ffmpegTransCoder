@@ -1,5 +1,4 @@
 #include "MainWindow.h"
-#include "DropAreaWidget.h"
 #include "MediaInfoCard.h"
 #include "PresetPanel.h"
 #include "TaskListView.h"
@@ -26,7 +25,6 @@ public:
     MainWindow *q_ptr{nullptr};
     TranscodeTaskManager manager;
 
-    DropAreaWidget *dropArea{nullptr};
     TaskListView *taskListView{nullptr};
     MediaInfoCard *mediaInfoCard{nullptr};
     PresetPanel *presetPanel{nullptr};
@@ -54,69 +52,53 @@ public:
         rootLayout->setContentsMargins(16, 16, 16, 16);
         rootLayout->setSpacing(12);
 
-        // 1. 顶部一体化命令工具栏
+        // 1. 顶部操作工具栏
         auto *headerWidget = new QWidget(centralWidget);
         headerWidget->setObjectName("topBarWidget");
         auto *headerLayout = new QHBoxLayout(headerWidget);
-        headerLayout->setContentsMargins(8, 4, 8, 4);
+        headerLayout->setContentsMargins(8, 6, 8, 6);
         headerLayout->setSpacing(8);
 
-        auto *logoLabel = new QLabel("🎬 FFmpeg Transcoder Pro", headerWidget);
-        logoLabel->setObjectName("brandLogoLabel");
-
-        auto *verBadge = new QLabel("Native C API", headerWidget);
-        verBadge->setObjectName("brandVersionBadge");
-
-        auto *sloganLabel = new QLabel("· 专业级音视频压制工具", headerWidget);
-        sloganLabel->setObjectName("brandSloganLabel");
-
-        addFileBtn = new QPushButton("➕ 添加媒体", headerWidget);
+        addFileBtn = new QPushButton("添加媒体", headerWidget);
         addFileBtn->setObjectName("btnPrimary");
         addFileBtn->setCursor(Qt::PointingHandCursor);
 
-        startAllBtn = new QPushButton("🚀 全部开始", headerWidget);
+        startAllBtn = new QPushButton("全部开始", headerWidget);
         startAllBtn->setObjectName("btnSuccess");
         startAllBtn->setCursor(Qt::PointingHandCursor);
 
-        pauseAllBtn = new QPushButton("⏸️ 暂停全部", headerWidget);
+        pauseAllBtn = new QPushButton("暂停全部", headerWidget);
         pauseAllBtn->setObjectName("btnWarning");
         pauseAllBtn->setCursor(Qt::PointingHandCursor);
 
-        cancelAllBtn = new QPushButton("⏹️ 终止全部", headerWidget);
+        cancelAllBtn = new QPushButton("终止全部", headerWidget);
         cancelAllBtn->setObjectName("btnDanger");
         cancelAllBtn->setCursor(Qt::PointingHandCursor);
 
-        clearAllBtn = new QPushButton("🗑️ 清空队列", headerWidget);
+        clearAllBtn = new QPushButton("清空队列", headerWidget);
         clearAllBtn->setCursor(Qt::PointingHandCursor);
 
-        headerLayout->addWidget(logoLabel);
-        headerLayout->addWidget(verBadge);
-        headerLayout->addWidget(sloganLabel);
-        headerLayout->addStretch();
         headerLayout->addWidget(addFileBtn);
         headerLayout->addWidget(startAllBtn);
         headerLayout->addWidget(pauseAllBtn);
         headerLayout->addWidget(cancelAllBtn);
         headerLayout->addWidget(clearAllBtn);
+        headerLayout->addStretch();
         rootLayout->addWidget(headerWidget);
 
         // 2. 主体左右分栏
         auto *splitter = new QSplitter(Qt::Horizontal, centralWidget);
         splitter->setHandleWidth(4);
 
-        // 左侧面板：拖拽区 + 任务队列
+        // 左侧面板：任务队列列表 (支持直接拖拽文件进入)
         auto *leftPanel = new QWidget(splitter);
         auto *leftLayout = new QVBoxLayout(leftPanel);
         leftLayout->setContentsMargins(0, 0, 8, 0);
-        leftLayout->setSpacing(10);
-
-        dropArea = new DropAreaWidget(leftPanel);
-        dropArea->setFixedHeight(120);
+        leftLayout->setSpacing(0);
 
         taskListView = new TaskListView(leftPanel);
         taskListView->setManager(&manager);
 
-        leftLayout->addWidget(dropArea);
         leftLayout->addWidget(taskListView, 1);
         splitter->addWidget(leftPanel);
 
@@ -138,7 +120,7 @@ public:
         mediaInfoCard = new MediaInfoCard(rightContainer);
         presetPanel = new PresetPanel(rightContainer);
 
-        applyToAllBtn = new QPushButton("🔄 将此配置应用到列表中所有任务", rightContainer);
+        applyToAllBtn = new QPushButton("将此配置应用到列表中所有任务", rightContainer);
         applyToAllBtn->setObjectName("applyAllBtn");
 
         rcLayout->addWidget(mediaInfoCard);
@@ -178,16 +160,7 @@ public:
             updateStatusText();
         };
 
-        QObject::connect(dropArea, &DropAreaWidget::filesDropped, onAddFiles);
-        QObject::connect(dropArea, &DropAreaWidget::fileSelected, [this, onAddFiles]() {
-            QStringList files = QFileDialog::getOpenFileNames(
-                q_ptr, "选择待转换的视频文件", "",
-                "视频文件 (*.mp4 *.mkv *.mov *.avi *.flv *.ts *.webm *.wmv *.m4v *.mp3 *.aac);;所有文件 (*.*)"
-            );
-            if (!files.isEmpty()) {
-                onAddFiles(files);
-            }
-        });
+        QObject::connect(taskListView, &TaskListView::filesDropped, onAddFiles);
 
         QObject::connect(addFileBtn, &QPushButton::clicked, [this, onAddFiles]() {
             QStringList files = QFileDialog::getOpenFileNames(
@@ -272,7 +245,7 @@ public:
         });
 
         QObject::connect(&manager, &TranscodeTaskManager::allTasksCompleted, [this]() {
-            statusLabel->setText("🎉 恭喜！列表中所有转码任务均已完成！");
+            statusLabel->setText("提示：列表中所有转码任务均已完成！");
         });
     }
 

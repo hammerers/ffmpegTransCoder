@@ -28,7 +28,7 @@ public:
         layout->setSpacing(8);
         layout->setAlignment(Qt::AlignCenter);
 
-        iconLabel = new QLabel("🎬", q_ptr);
+        iconLabel = new QLabel("", q_ptr);
         iconLabel->setObjectName("dropIconLabel");
         iconLabel->setAlignment(Qt::AlignCenter);
 

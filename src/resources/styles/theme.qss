@@ -159,6 +159,40 @@ DropAreaWidget[isDragging="true"] {
     background-color: #2e3546;
 }
 
+/* 任务列表容器视图 (TaskListView) 与空状态灰色提示 */
+TaskListView {
+    background-color: #171922;
+    border: 1px solid #272c3d;
+    border-radius: 8px;
+}
+
+TaskListView[isDragging="true"] {
+    border: 2px dashed #38bdf8;
+    background-color: #162032;
+}
+
+#taskListScrollArea, #taskListContainer {
+    background-color: transparent;
+    border: none;
+}
+
+#taskEmptyPlaceholder {
+    background-color: transparent;
+}
+
+#taskEmptyTitle {
+    color: #94a3b8;
+    font-size: 15px;
+    font-weight: 600;
+    background: transparent;
+}
+
+#taskEmptySubtitle {
+    color: #64748b;
+    font-size: 13px;
+    background: transparent;
+}
+
 /* 任务列表项卡片 (TaskItemWidget) */
 TaskItemWidget {
     background-color: #1b1e27;
