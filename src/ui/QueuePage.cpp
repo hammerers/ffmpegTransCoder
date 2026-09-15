@@ -10,6 +10,7 @@
 #include <QFileInfo>
 #include <QProcess>
 #include <QDir>
+#include <QTimer>
 
 namespace ffmpeg_transform {
 
@@ -27,6 +28,7 @@ public:
     QPushButton *stopBtn{nullptr};
     QPushButton *removeBtn{nullptr};
     QPushButton *resetBtn{nullptr};
+    QPushButton *applyParamsBtn{nullptr};
     QPushButton *locateBtn{nullptr};
 
     // 统计标签
@@ -67,6 +69,7 @@ public:
         stopBtn = createActionBtn("停止", "btnActionStop");
         removeBtn = createActionBtn("移除", "btnActionRemove");
         resetBtn = createActionBtn("重置", "btnActionReset");
+        applyParamsBtn = createActionBtn("应用参数", "btnActionApplyAll");
         locateBtn = createActionBtn("定位", "btnActionLocate");
 
         menuLayout->addWidget(startBtn);
@@ -75,6 +78,7 @@ public:
         menuLayout->addWidget(stopBtn);
         menuLayout->addWidget(removeBtn);
         menuLayout->addWidget(resetBtn);
+        menuLayout->addWidget(applyParamsBtn);
         menuLayout->addWidget(locateBtn);
         menuLayout->addStretch();
 
@@ -161,6 +165,14 @@ public:
                 }
                 updateStats();
             }
+        });
+
+        QObject::connect(applyParamsBtn, &QPushButton::clicked, [this]() {
+            emit q_ptr->applyParamsToAllRequested();
+            applyParamsBtn->setText("已应用");
+            QTimer::singleShot(1800, [this]() {
+                if (applyParamsBtn) applyParamsBtn->setText("应用参数");
+            });
         });
 
         QObject::connect(locateBtn, &QPushButton::clicked, [this]() {

@@ -25,6 +25,7 @@ public:
 signals:
     void taskSelected(const QString &taskId);
     void filesDropped(const QStringList &files);
+    void applyParamsToAllRequested();
 
 private:
     std::unique_ptr<QueuePagePrivate> const d_ptr;

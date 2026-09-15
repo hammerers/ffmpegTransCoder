@@ -78,6 +78,7 @@ TranscodeConfig TranscodeTask::config() const {
 void TranscodeTask::setConfig(const TranscodeConfig &config) {
     Q_D(TranscodeTask);
     d->config = config;
+    emit configChanged(config);
 }
 
 TaskState TranscodeTask::state() const {

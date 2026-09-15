@@ -128,6 +128,12 @@ public:
             updateProgress(p);
         });
 
+        QObject::connect(task, &TranscodeTask::configChanged, [this](const TranscodeConfig &cfg) {
+            if (detailLabel) {
+                detailLabel->setText(cfg.outputPath);
+            }
+        });
+
         // 绑定按钮点击
         QObject::connect(pauseResumeBtn, &QPushButton::clicked, [this]() {
             if (state == TaskState::Converting) {

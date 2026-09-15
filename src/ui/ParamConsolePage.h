@@ -26,6 +26,7 @@ public:
 
 signals:
     void configChanged(const TranscodeConfig &cfg);
+    void applyToAllRequested(const TranscodeConfig &cfg);
 
 private:
     std::unique_ptr<ParamConsolePagePrivate> const d_ptr;

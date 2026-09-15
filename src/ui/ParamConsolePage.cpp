@@ -12,6 +12,7 @@
 #include <QScrollArea>
 #include <QGuiApplication>
 #include <QClipboard>
+#include <QTimer>
 #include <QStyle>
 
 namespace ffmpeg_transform {
@@ -55,6 +56,7 @@ public:
 
     // 实时等效命令预览
     QLineEdit *cmdPreviewEdit{nullptr};
+    QPushButton *applyToAllBtn{nullptr};
     QPushButton *copyCmdBtn{nullptr};
 
     void initUI() {
@@ -416,11 +418,16 @@ public:
         cmdPreviewEdit->setObjectName("commandPreviewText");
         cmdPreviewEdit->setReadOnly(true);
 
+        applyToAllBtn = new QPushButton("应用至队列全部视频", previewCard);
+        applyToAllBtn->setObjectName("btnApplyToAllParams");
+        applyToAllBtn->setCursor(Qt::PointingHandCursor);
+
         copyCmdBtn = new QPushButton("复制参数", previewCard);
         copyCmdBtn->setObjectName("btnCopyCmd");
         copyCmdBtn->setCursor(Qt::PointingHandCursor);
 
         previewLayout->addWidget(cmdPreviewEdit, 1);
+        previewLayout->addWidget(applyToAllBtn);
         previewLayout->addWidget(copyCmdBtn);
         rightLayout->addWidget(previewCard);
     }
@@ -501,6 +508,14 @@ public:
             }
             updatePreview();
             emit q_ptr->configChanged(q_ptr->config());
+        });
+
+        QObject::connect(applyToAllBtn, &QPushButton::clicked, [this]() {
+            emit q_ptr->applyToAllRequested(q_ptr->config());
+            applyToAllBtn->setText("已应用至全部");
+            QTimer::singleShot(1800, [this]() {
+                if (applyToAllBtn) applyToAllBtn->setText("应用至队列全部视频");
+            });
         });
 
         QObject::connect(copyCmdBtn, &QPushButton::clicked, [this]() {

@@ -42,6 +42,7 @@ public:
 signals:
     void stateChanged(TaskState state);
     void progressChanged(const TranscodeProgress &progress);
+    void configChanged(const TranscodeConfig &config);
     void thumbnailLoaded(const QImage &image);
     void mediaInfoLoaded(const MediaInfo &info);
     void errorOccurred(const QString &message);

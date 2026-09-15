@@ -138,7 +138,16 @@ public:
         auto onAddFiles = [this](const QStringList &files) {
             for (const auto &file : files) {
                 if (QFileInfo::exists(file)) {
-                    manager.addTask(file);
+                    auto *t = manager.addTask(file);
+                    // 默认采用参数面板当前配置
+                    if (t && paramPage) {
+                        TranscodeConfig newCfg = paramPage->config();
+                        newCfg.inputPath = t->inputFilePath();
+                        QFileInfo fi(t->inputFilePath());
+                        QString ext = newCfg.containerFormat;
+                        newCfg.outputPath = fi.absolutePath() + "/" + fi.completeBaseName() + "_converted." + ext;
+                        t->setConfig(newCfg);
+                    }
                 }
             }
             q_ptr->setHasTasks(!manager.allTasks().isEmpty());
@@ -184,6 +193,27 @@ public:
                 QString ext = cfg.containerFormat;
                 newCfg.outputPath = fi.absolutePath() + "/" + fi.completeBaseName() + "_converted." + ext;
                 t->setConfig(newCfg);
+            }
+        });
+
+        // 应用参数到队列所有视频统一联动
+        auto applyConfigToAll = [this](const TranscodeConfig &cfg) {
+            for (auto *t : manager.allTasks()) {
+                if (t->state() != TaskState::Converting && t->state() != TaskState::Completed) {
+                    TranscodeConfig newCfg = cfg;
+                    newCfg.inputPath = t->inputFilePath();
+                    QFileInfo fi(t->inputFilePath());
+                    QString ext = cfg.containerFormat;
+                    newCfg.outputPath = fi.absolutePath() + "/" + fi.completeBaseName() + "_converted." + ext;
+                    t->setConfig(newCfg);
+                }
+            }
+        };
+
+        QObject::connect(paramPage, &ParamConsolePage::applyToAllRequested, applyConfigToAll);
+        QObject::connect(queuePage, &QueuePage::applyParamsToAllRequested, [this, applyConfigToAll]() {
+            if (paramPage) {
+                applyConfigToAll(paramPage->config());
             }
         });
 
