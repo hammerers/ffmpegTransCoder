@@ -68,22 +68,10 @@ public:
 
         addSeparator();
 
-        // Group 2: 转码工作流
+        // Group 2: 转码工作流与媒体信息
         createBtn(2, "准备文件");
         createBtn(3, "参数面板");
         createBtn(4, "媒体信息");
-
-        addSeparator();
-
-        // Group 3: 监控与扩展
-        createBtn(5, "性能监控");
-        createBtn(6, "集成工具");
-
-        addSeparator();
-
-        // Group 4: 系统与设置
-        createBtn(7, "软件设置");
-        createBtn(8, "关于系统");
 
         mainLayout->addStretch();
 

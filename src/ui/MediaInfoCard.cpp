@@ -39,7 +39,7 @@ public:
         placeholderWidget = new QWidget(q_ptr);
         auto *phLayout = new QVBoxLayout(placeholderWidget);
         phLayout->setAlignment(Qt::AlignCenter);
-        auto *phLabel = new QLabel("请在左侧选择视频以查看详细信息与设置参数", placeholderWidget);
+        auto *phLabel = new QLabel("请在右侧列表中选择视频以查看详细信息与参数", placeholderWidget);
         phLabel->setObjectName("cardPlaceholderLabel");
         phLabel->setAlignment(Qt::AlignCenter);
         phLayout->addWidget(phLabel);

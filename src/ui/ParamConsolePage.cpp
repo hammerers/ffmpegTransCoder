@@ -127,48 +127,32 @@ public:
             });
         };
 
-        addBtn(0, "参数总览");
-        addBtn(1, "预设管理");
+        addBtn(0, "预设管理");
         addSep();
-        addBtn(2, "输出文件设置");
-        addBtn(3, "解码设置");
+        addBtn(1, "视频编码器");
+        addBtn(2, "画面与帧率");
+        addBtn(3, "质量控制");
         addSep();
-        addBtn(4, "视频参数 | 编码器");
-        addBtn(5, "视频参数 | 画面帧");
-        addBtn(6, "视频参数 | 质量");
-        addBtn(7, "视频参数 | 色彩管理");
-        addSep();
-        addBtn(8, "音频参数");
-        addSep();
-        addBtn(9, "剪辑区间");
-        addBtn(10, "滤镜排序");
-        addBtn(11, "自定义参数");
-        addBtn(12, "流控制");
+        addBtn(4, "音频与封装");
+        addBtn(5, "输出文件设置");
 
         sidebarLayout->addStretch();
     }
 
     void initPages() {
-        // 创建各页面
-        pageStack->addWidget(createSummaryPage());      // 0
-        pageStack->addWidget(createPresetMgrPage());    // 1
-        pageStack->addWidget(createOutputPage());       // 2
-        pageStack->addWidget(createSimpleHintPage("解码设置", "自动探测源流硬件解码上下文 (DXVA2 / D3D11VA / CUDA)")); // 3
-        pageStack->addWidget(createVideoEncoderPage());  // 4 (默认高频重点)
-        pageStack->addWidget(createVideoFramePage());    // 5
-        pageStack->addWidget(createVideoQualityPage());  // 6
-        pageStack->addWidget(createSimpleHintPage("色彩管理", "默认遵循 BT.709 与 sRGB 色彩空间，支持 HDR10 自动映射")); // 7
-        pageStack->addWidget(createAudioPage());         // 8
-        pageStack->addWidget(createSimpleHintPage("剪辑区间", "可在编码队列中微调起止时间戳，支持无损关键帧截取")); // 9
-        pageStack->addWidget(createSimpleHintPage("滤镜排序", "支持 scale, yadif 去隔行, fps 速率插值滤镜链")); // 10
-        pageStack->addWidget(createSimpleHintPage("自定义参数", "进阶专家可在下方实时预览框中直接追加自定义 FFmpeg 参数")); // 11
-        pageStack->addWidget(createSimpleHintPage("流控制", "支持多音轨合并、双语字幕选择与首选流映射")); // 12
+        // 创建各页面 (仅保留具备完备交互控件的核心参数页)
+        pageStack->addWidget(createPresetMgrPage());    // 0: 预设管理
+        pageStack->addWidget(createVideoEncoderPage());  // 1: 视频参数 | 编码器
+        pageStack->addWidget(createVideoFramePage());    // 2: 视频参数 | 画面帧
+        pageStack->addWidget(createVideoQualityPage());  // 3: 视频参数 | 质量
+        pageStack->addWidget(createAudioPage());         // 4: 音频参数
+        pageStack->addWidget(createOutputPage());       // 5: 输出文件设置
 
-        // 默认选中 "视频参数 | 编码器" (对应截图 4)
-        pageStack->setCurrentIndex(4);
-        if (subNavBtns.size() > 4) {
-            subNavBtns[4]->setChecked(true);
-            subNavBtns[4]->setProperty("active", true);
+        // 默认选中 "视频编码器"
+        pageStack->setCurrentIndex(1);
+        if (subNavBtns.size() > 1) {
+            subNavBtns[1]->setChecked(true);
+            subNavBtns[1]->setProperty("active", true);
         }
     }
 
@@ -417,32 +401,6 @@ public:
         quickPresetCombo->addItem("Apple 影视 (MOV / H.264 原画)");
         layout->addWidget(createSection("快速预设加载", "一键应用工业级成熟调优参数方案", createTagRow("快速预设", quickPresetCombo)));
 
-        layout->addStretch();
-        return panel;
-    }
-
-    // 概要页面
-    QWidget* createSummaryPage() {
-        auto *panel = new QWidget(pageStack);
-        auto *layout = new QVBoxLayout(panel);
-        layout->setContentsMargins(0, 0, 0, 0);
-        layout->setSpacing(14);
-
-        auto *info = new QLabel("当前系统正采用高性能原生 FFmpeg C API 编解码流水线。\n您可以在左侧分类中自由配置视频、音频与封装格式；所有改动均会实时同步至下方等效参数终端中。", panel);
-        info->setObjectName("paramSectionSubtitle");
-        info->setWordWrap(true);
-        layout->addWidget(createSection("参数体系概览", "集中管理全局转码参数", info));
-        layout->addStretch();
-        return panel;
-    }
-
-    QWidget* createSimpleHintPage(const QString &title, const QString &desc) {
-        auto *panel = new QWidget(pageStack);
-        auto *layout = new QVBoxLayout(panel);
-        layout->setContentsMargins(0, 0, 0, 0);
-        auto *l = new QLabel(desc, panel);
-        l->setObjectName("paramSectionSubtitle");
-        layout->addWidget(createSection(title, "工作台进阶调优项目", l));
         layout->addStretch();
         return panel;
     }

@@ -865,3 +865,65 @@ QSplitter::handle:hover {
     color: #38bdf8;
 }
 
+/* 媒体信息页 - 右侧队列视频列表面板 */
+#inspectorRightPanel {
+    background-color: #181b24;
+    border: 1px solid #282e3e;
+    border-radius: 8px;
+}
+
+#inspectorListHeader {
+    font-size: 13px;
+    font-weight: 700;
+    color: #f1f5f9;
+}
+
+#inspectorListBadge {
+    font-size: 11px;
+    font-weight: 600;
+    color: #38bdf8;
+    background-color: #14161d;
+    border: 1px solid #282e3e;
+    border-radius: 10px;
+    padding: 2px 8px;
+}
+
+#inspectorVideoList {
+    background-color: #14161d;
+    border: 1px solid #242834;
+    border-radius: 6px;
+    padding: 4px;
+    outline: none;
+}
+
+#inspectorVideoList::item {
+    background-color: #1a1e28;
+    color: #e2e8f0;
+    border: 1px solid #232836;
+    border-radius: 5px;
+    padding: 8px 10px;
+    margin-bottom: 4px;
+    font-size: 12px;
+}
+
+#inspectorVideoList::item:hover {
+    background-color: #22293a;
+    border-color: #38bdf8;
+    color: #ffffff;
+}
+
+#inspectorVideoList::item:selected {
+    background-color: #1e3a5f;
+    border: 1px solid #38bdf8;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+#inspectorEmptyLabel {
+    color: #64748b;
+    font-size: 12px;
+    background-color: transparent;
+    padding: 16px;
+}
+
+

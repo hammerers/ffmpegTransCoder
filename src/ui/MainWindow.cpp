@@ -99,38 +99,13 @@ public:
         filePrepPage = new FilePrepPage(pageStack);
         paramPage = new ParamConsolePage(pageStack);
         mediaInspectorPage = new MediaInspectorPage(pageStack);
-
-        // 创建辅助功能页面占位
-        auto createPlaceholderPage = [this](const QString &title, const QString &desc) -> QWidget* {
-            auto *w = new QWidget(pageStack);
-            auto *l = new QVBoxLayout(w);
-            l->setAlignment(Qt::AlignCenter);
-            l->setSpacing(8);
-            auto *t = new QLabel(title, w);
-            t->setObjectName("paramSectionTitle");
-            t->setAlignment(Qt::AlignCenter);
-            auto *d = new QLabel(desc, w);
-            d->setObjectName("paramSectionSubtitle");
-            d->setAlignment(Qt::AlignCenter);
-            l->addWidget(t);
-            l->addWidget(d);
-            return w;
-        };
-
-        QWidget *perfPage = createPlaceholderPage("性能监控面板", "实时捕获硬件编解码利用率、帧率吞吐量与内存占用");
-        QWidget *toolsPage = createPlaceholderPage("集成工具箱", "包含视频无损截取、音频提取、字幕压制与色彩空间转换工具");
-        QWidget *settingsPage = createPlaceholderPage("软件设置", "配置默认输出路径、线程池大小与 GPU 硬件加速首选项");
-        QWidget *aboutPage = createPlaceholderPage("关于系统", "FFmpeg Transcoder Pro 6.0\n全链路基于原生 C API 构建，具备高吞吐量与专业压制调校能力");
+        mediaInspectorPage->setManager(&manager);
 
         pageStack->addWidget(homePage);            // 0: 起始页面
         pageStack->addWidget(queuePage);           // 1: 编码队列
         pageStack->addWidget(filePrepPage);        // 2: 准备文件
         pageStack->addWidget(paramPage);           // 3: 参数面板
         pageStack->addWidget(mediaInspectorPage);  // 4: 媒体信息
-        pageStack->addWidget(perfPage);            // 5: 性能监控
-        pageStack->addWidget(toolsPage);           // 6: 集成工具
-        pageStack->addWidget(settingsPage);        // 7: 软件设置
-        pageStack->addWidget(aboutPage);           // 8: 关于系统
 
         bodyLayout->addWidget(navSidebar);
         bodyLayout->addWidget(pageStack, 1);
@@ -176,17 +151,27 @@ public:
 
         QObject::connect(queuePage, &QueuePage::filesDropped, onAddFiles);
 
-        // 任务选中联动
+        // 任务选中联动 (队列页面选中)
         QObject::connect(queuePage, &QueuePage::taskSelected, [this](const QString &id) {
+            currentSelectedTaskId = id;
+            mediaInspectorPage->selectTask(id);
+            auto *t = manager.getTask(id);
+            if (t) {
+                paramPage->setConfig(t->config());
+            }
+        });
+
+        // 媒体信息页选中联动
+        QObject::connect(mediaInspectorPage, &MediaInspectorPage::taskSelected, [this](const QString &id) {
             currentSelectedTaskId = id;
             auto *t = manager.getTask(id);
             if (t) {
-                mediaInspectorPage->setMedia(t->mediaInfo(), t->thumbnail());
                 paramPage->setConfig(t->config());
-            } else {
-                mediaInspectorPage->clearMedia();
             }
         });
+
+        // 媒体信息页拖拽加入文件联动
+        QObject::connect(mediaInspectorPage, &MediaInspectorPage::filesDropped, onAddFiles);
 
         // 预设修改更新到当前选中的任务
         QObject::connect(paramPage, &ParamConsolePage::configChanged, [this](const TranscodeConfig &cfg) {
