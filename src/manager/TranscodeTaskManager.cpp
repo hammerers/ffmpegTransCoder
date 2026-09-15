@@ -104,9 +104,8 @@ public:
         QString taskId = task->id();
         auto engine = std::make_unique<TranscodeEngine>();
 
-        QObject::connect(engine.get(), &TranscodeEngine::stateChanged, q_ptr, [this, task](TaskState state) {
+        QObject::connect(engine.get(), &TranscodeEngine::stateChanged, q_ptr, [task](TaskState state) {
             task->setState(state);
-            emit q_ptr->taskStateChanged(task, state);
         });
 
         QObject::connect(engine.get(), &TranscodeEngine::progressUpdated, q_ptr, [task](const TranscodeProgress &p) {
@@ -144,6 +143,12 @@ TranscodeTask* TranscodeTaskManager::addTask(const QString &inputFilePath) {
     Q_D(TranscodeTaskManager);
     auto *task = new TranscodeTask(inputFilePath, this);
     d->tasks.append(task);
+
+    // 绑定单个任务状态变化信号，向上统一派发状态变更通知
+    connect(task, &TranscodeTask::stateChanged, this, [this, task](TaskState state) {
+        emit taskStateChanged(task, state);
+    });
+
     emit taskAdded(task);
     d->analyzeMediaAsync(task);
     return task;

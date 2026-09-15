@@ -191,7 +191,7 @@ public:
         auto tasks = manager->allTasks();
         int running = 0, error = 0;
         for (auto *t : tasks) {
-            if (t->state() == TaskState::Converting || t->state() == TaskState::Analyzing) {
+            if (t->state() == TaskState::Converting) {
                 running++;
             } else if (t->state() == TaskState::Failed) {
                 error++;
