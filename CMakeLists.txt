@@ -114,7 +114,7 @@ target_link_libraries(test_transcoder PRIVATE
 )
 
 # 拷贝 FFmpeg 运行时 DLL 到输出目录
-file(GLOB FFMPEG_DLLS "${FFMPEG_DIR}/bin/*.dll")
+file(GLOB FFMPEG_DLLS CONFIGURE_DEPENDS "${FFMPEG_DIR}/bin/*.dll")
 
 add_custom_command(TARGET FFmpegVideoTransform POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
