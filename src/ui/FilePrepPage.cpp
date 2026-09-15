@@ -143,7 +143,10 @@ public:
         });
 
         QObject::connect(enqueueBtn, &QPushButton::clicked, [this]() {
-            QStringList files = q_ptr->fileList();
+            QStringList files = q_ptr->selectedFileList();
+            if (files.isEmpty()) {
+                files = q_ptr->fileList();
+            }
             if (!files.isEmpty()) {
                 emit q_ptr->enqueueFilesRequested(files);
             }
@@ -213,6 +216,21 @@ QStringList FilePrepPage::fileList() const {
     QStringList list;
     for (int r = 0; r < d_ptr->fileTable->rowCount(); ++r) {
         auto *item = d_ptr->fileTable->item(r, 1);
+        if (item) {
+            list.append(item->text());
+        }
+    }
+    return list;
+}
+
+QStringList FilePrepPage::selectedFileList() const {
+    QStringList list;
+    auto sel = d_ptr->fileTable->selectionModel()->selectedRows();
+    std::sort(sel.begin(), sel.end(), [](const QModelIndex &a, const QModelIndex &b) {
+        return a.row() < b.row();
+    });
+    for (const auto &idx : sel) {
+        auto *item = d_ptr->fileTable->item(idx.row(), 1);
         if (item) {
             list.append(item->text());
         }

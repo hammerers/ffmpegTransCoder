@@ -19,6 +19,7 @@ public:
     ~FilePrepPage() override;
 
     QStringList fileList() const;
+    QStringList selectedFileList() const;
     void addFiles(const QStringList &files);
 
 signals:
