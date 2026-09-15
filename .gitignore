@@ -1,11 +1,16 @@
 # Build directories
 build/
-bin/
-lib/
+/bin/
+/lib/
 out/
 cmake-build-*/
 .vs/
 .vscode/
+.qtcreator/
+
+# Ensure 3rdparty libraries and runtime DLLs are tracked
+!3rdparty/
+!3rdparty/**
 
 # Qt generated
 Makefile*

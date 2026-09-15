@@ -19,8 +19,16 @@ int main(int argc, char *argv[]) {
     std::cout << "========================================\n";
 
     QString testVideo = "E:/temp/FTP/me/v1.mp4";
+    if (argc > 1) {
+        testVideo = QString::fromLocal8Bit(argv[1]);
+    } else if (!QFile::exists(testVideo)) {
+        if (QFile::exists("v1.mp4")) testVideo = "v1.mp4";
+        else if (QFile::exists("../v1.mp4")) testVideo = "../v1.mp4";
+    }
+
     if (!QFile::exists(testVideo)) {
         std::cerr << "[ERROR] Test video does not exist: " << testVideo.toStdString() << std::endl;
+        std::cerr << "Usage: test_transcoder [path_to_video.mp4]" << std::endl;
         return 1;
     }
 
