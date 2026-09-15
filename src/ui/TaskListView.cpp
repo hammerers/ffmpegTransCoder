@@ -54,7 +54,7 @@ public:
         emptyTitleLabel->setObjectName("taskEmptyTitle");
         emptyTitleLabel->setAlignment(Qt::AlignCenter);
 
-        emptySubtitleLabel = new QLabel("可将视频文件拖拽至此，或点击上方“添加媒体”", emptyPlaceholderWidget);
+        emptySubtitleLabel = new QLabel("可将视频文件拖拽至此", emptyPlaceholderWidget);
         emptySubtitleLabel->setObjectName("taskEmptySubtitle");
         emptySubtitleLabel->setAlignment(Qt::AlignCenter);
 
