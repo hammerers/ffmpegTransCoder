@@ -103,8 +103,7 @@ ffmpeg_transform/
 ├── session_summary.md                     # 会话技术决策与设计反思总结文档
 ├── skill.md                               # C++ SDK 工程设计规范准则
 ├── 3rdparty/                              # 第三方 SDK
-│   ├── ffmpeg/                            # FFmpeg 头文件、导入库与运行时 DLL
-│   └── sdl2/                              # SDL2 头文件与库
+│   └── ffmpeg/                            # FFmpeg 头文件、导入库与运行时 DLL
 ├── src/
 │   ├── main.cpp                           # 桌面程序入口点
 │   ├── core/                              # 核心转码引擎与 FFmpeg 底层封装

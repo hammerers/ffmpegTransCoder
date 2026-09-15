@@ -19,7 +19,6 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Concurrent)
 
 # 配置 FFmpeg 第三方依赖
 set(FFMPEG_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/ffmpeg")
-set(SDL2_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/sdl2")
 
 add_library(FFmpeg::FFmpeg INTERFACE IMPORTED)
 target_include_directories(FFmpeg::FFmpeg INTERFACE
@@ -34,14 +33,6 @@ target_link_libraries(FFmpeg::FFmpeg INTERFACE
     "${FFMPEG_DIR}/lib/avfilter.lib"
     "${FFMPEG_DIR}/lib/avdevice.lib"
     "${FFMPEG_DIR}/lib/postproc.lib"
-)
-
-add_library(SDL2::SDL2 INTERFACE IMPORTED)
-target_include_directories(SDL2::SDL2 INTERFACE
-    "${SDL2_DIR}/include"
-)
-target_link_libraries(SDL2::SDL2 INTERFACE
-    "${SDL2_DIR}/lib/SDL2.lib"
 )
 
 # 核心转码引擎与业务逻辑库
@@ -70,7 +61,6 @@ target_link_libraries(transcoder_core PUBLIC
     Qt6::Gui
     Qt6::Concurrent
     FFmpeg::FFmpeg
-    SDL2::SDL2
 )
 
 # 桌面客户端 GUI 主程序
@@ -123,19 +113,19 @@ target_link_libraries(test_transcoder PRIVATE
     Qt6::Gui
 )
 
-# 拷贝 FFmpeg / SDL2 运行时 DLL 到输出目录
+# 拷贝 FFmpeg 运行时 DLL 到输出目录
 file(GLOB FFMPEG_DLLS "${FFMPEG_DIR}/bin/*.dll")
 
 add_custom_command(TARGET FFmpegVideoTransform POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${FFMPEG_DLLS}
         $<TARGET_FILE_DIR:FFmpegVideoTransform>
-    COMMENT "Copying FFmpeg and SDL2 runtime DLLs to application directory..."
+    COMMENT "Copying FFmpeg runtime DLLs to application directory..."
 )
 
 add_custom_command(TARGET test_transcoder POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${FFMPEG_DLLS}
         $<TARGET_FILE_DIR:test_transcoder>
-    COMMENT "Copying FFmpeg and SDL2 runtime DLLs to test directory..."
+    COMMENT "Copying FFmpeg runtime DLLs to test directory..."
 )
