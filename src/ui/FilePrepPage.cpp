@@ -8,7 +8,9 @@
 #include <QLabel>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QDir>
 #include <QDirIterator>
+#include <QSet>
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QMimeData>
@@ -22,12 +24,15 @@ public:
     QPushButton *enqueueBtn{nullptr};
     QPushButton *addFileBtn{nullptr};
     QPushButton *addFolderBtn{nullptr};
+    QPushButton *refreshBtn{nullptr};
     QPushButton *removeSelectedBtn{nullptr};
     QPushButton *removeAllBtn{nullptr};
     QComboBox *sortCombo{nullptr};
 
     QTableWidget *fileTable{nullptr};
     QLabel *bottomHintLabel{nullptr};
+
+    QSet<QString> trackedFolders;
 
     void initUI() {
         q_ptr->setObjectName("filePrepPage");
@@ -54,6 +59,9 @@ public:
         addFolderBtn = new QPushButton("添加文件夹及子目录", actionBar);
         addFolderBtn->setCursor(Qt::PointingHandCursor);
 
+        refreshBtn = new QPushButton("刷新", actionBar);
+        refreshBtn->setCursor(Qt::PointingHandCursor);
+
         removeSelectedBtn = new QPushButton("移除选中", actionBar);
         removeSelectedBtn->setCursor(Qt::PointingHandCursor);
 
@@ -69,6 +77,7 @@ public:
         actionLayout->addWidget(enqueueBtn);
         actionLayout->addWidget(addFileBtn);
         actionLayout->addWidget(addFolderBtn);
+        actionLayout->addWidget(refreshBtn);
         actionLayout->addWidget(removeSelectedBtn);
         actionLayout->addWidget(removeAllBtn);
         actionLayout->addWidget(sortCombo);
@@ -115,16 +124,12 @@ public:
         QObject::connect(addFolderBtn, &QPushButton::clicked, [this]() {
             QString dir = QFileDialog::getExistingDirectory(q_ptr, "选择包含媒体文件的文件夹");
             if (!dir.isEmpty()) {
-                QStringList filters = {"*.mp4", "*.mkv", "*.mov", "*.avi", "*.flv", "*.ts", "*.webm", "*.wmv", "*.mp3", "*.aac"};
-                QDirIterator it(dir, filters, QDir::Files, QDirIterator::Subdirectories);
-                QStringList foundFiles;
-                while (it.hasNext()) {
-                    foundFiles.append(it.next());
-                }
-                if (!foundFiles.isEmpty()) {
-                    q_ptr->addFiles(foundFiles);
-                }
+                q_ptr->addFolder(dir);
             }
+        });
+
+        QObject::connect(refreshBtn, &QPushButton::clicked, [this]() {
+            q_ptr->refresh();
         });
 
         QObject::connect(removeSelectedBtn, &QPushButton::clicked, [this]() {
@@ -140,6 +145,10 @@ public:
 
         QObject::connect(removeAllBtn, &QPushButton::clicked, [this]() {
             fileTable->setRowCount(0);
+            trackedFolders.clear();
+            if (bottomHintLabel) {
+                bottomHintLabel->setText("可以直接把文件拖进编码队列来开始，如果文件很多或者有其他需求再用这个页面");
+            }
         });
 
         QObject::connect(enqueueBtn, &QPushButton::clicked, [this]() {
@@ -159,6 +168,63 @@ public:
                 fileTable->sortItems(3, Qt::AscendingOrder);
             }
         });
+    }
+
+    void refresh() {
+        int removedCount = 0;
+
+        // 1. 检查表格中已存在的文件：如果文件在磁盘上已被删除则移除，否则重新获取并更新大小
+        for (int r = fileTable->rowCount() - 1; r >= 0; --r) {
+            auto *pathItem = fileTable->item(r, 1);
+            if (!pathItem) continue;
+            QString path = pathItem->text();
+            QFileInfo fi(path);
+            if (!fi.exists()) {
+                fileTable->removeRow(r);
+                removedCount++;
+            } else {
+                qint64 bytes = fi.size();
+                QString sizeStr;
+                if (bytes < 1024 * 1024) {
+                    sizeStr = QString::asprintf("%.1f KB", bytes / 1024.0);
+                } else if (bytes < 1024 * 1024 * 1024) {
+                    sizeStr = QString::asprintf("%.2f MB", bytes / (1024.0 * 1024.0));
+                } else {
+                    sizeStr = QString::asprintf("%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0));
+                }
+                if (auto *sizeItem = fileTable->item(r, 3)) {
+                    sizeItem->setText(sizeStr);
+                }
+            }
+        }
+
+        // 2. 重新扫描所有追踪的文件夹及子目录中的新媒体文件
+        QStringList filters = {"*.mp4", "*.mkv", "*.mov", "*.avi", "*.flv", "*.ts", "*.webm", "*.wmv", "*.mp3", "*.aac"};
+        int countBeforeScan = fileTable->rowCount();
+        for (const QString &folderPath : trackedFolders) {
+            if (!QDir(folderPath).exists()) continue;
+            QDirIterator it(folderPath, filters, QDir::Files, QDirIterator::Subdirectories);
+            while (it.hasNext()) {
+                appendFileRow(it.next());
+            }
+        }
+        int addedCount = fileTable->rowCount() - countBeforeScan;
+
+        // 3. 重新应用当前排序规则
+        int sortIdx = sortCombo->currentIndex();
+        if (sortIdx == 1) {
+            fileTable->sortItems(0, Qt::AscendingOrder);
+        } else if (sortIdx == 2) {
+            fileTable->sortItems(3, Qt::AscendingOrder);
+        }
+
+        // 4. 更新底部状态反馈
+        if (bottomHintLabel) {
+            bottomHintLabel->setText(
+                QString("刷新完成: 新增 %1 个文件，移除 %2 个失效文件，当前共 %3 个文件")
+                    .arg(addedCount).arg(removedCount).arg(fileTable->rowCount())
+            );
+        }
     }
 
     void appendFileRow(const QString &filePath) {
@@ -244,6 +310,33 @@ void FilePrepPage::addFiles(const QStringList &files) {
     }
 }
 
+void FilePrepPage::addFolder(const QString &dirPath) {
+    Q_D(FilePrepPage);
+    QDir dir(dirPath);
+    if (!dir.exists()) return;
+
+    d->trackedFolders.insert(QDir::cleanPath(dir.absolutePath()));
+
+    QStringList filters = {"*.mp4", "*.mkv", "*.mov", "*.avi", "*.flv", "*.ts", "*.webm", "*.wmv", "*.mp3", "*.aac"};
+    QDirIterator it(dirPath, filters, QDir::Files, QDirIterator::Subdirectories);
+    int beforeCount = d->fileTable->rowCount();
+    while (it.hasNext()) {
+        d->appendFileRow(it.next());
+    }
+    int added = d->fileTable->rowCount() - beforeCount;
+    if (d->bottomHintLabel) {
+        d->bottomHintLabel->setText(
+            QString("已导入文件夹: %1 (包含子目录，新增 %2 个媒体文件)")
+                .arg(dir.dirName()).arg(added)
+        );
+    }
+}
+
+void FilePrepPage::refresh() {
+    Q_D(FilePrepPage);
+    d->refresh();
+}
+
 void FilePrepPage::dragEnterEvent(QDragEnterEvent *event) {
     if (event->mimeData()->hasUrls()) {
         event->acceptProposedAction();
@@ -260,7 +353,13 @@ void FilePrepPage::dropEvent(QDropEvent *event) {
     QStringList files;
     for (const auto &u : event->mimeData()->urls()) {
         if (u.isLocalFile()) {
-            files.append(u.toLocalFile());
+            QString path = u.toLocalFile();
+            QFileInfo fi(path);
+            if (fi.isDir()) {
+                addFolder(path);
+            } else if (fi.isFile()) {
+                files.append(path);
+            }
         }
     }
     if (!files.isEmpty()) {

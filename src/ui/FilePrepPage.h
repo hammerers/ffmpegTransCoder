@@ -21,6 +21,8 @@ public:
     QStringList fileList() const;
     QStringList selectedFileList() const;
     void addFiles(const QStringList &files);
+    void addFolder(const QString &dirPath);
+    void refresh();
 
 signals:
     void enqueueFilesRequested(const QStringList &files);
