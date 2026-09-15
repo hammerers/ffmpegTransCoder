@@ -408,28 +408,20 @@ public:
     void initPreviewBar(QVBoxLayout *rightLayout, QWidget *rightArea) {
         auto *previewCard = new QWidget(rightArea);
         previewCard->setObjectName("commandPreviewCard");
-        auto *previewLayout = new QVBoxLayout(previewCard);
-        previewLayout->setContentsMargins(10, 8, 10, 8);
-        previewLayout->setSpacing(6);
-
-        auto *pHeader = new QHBoxLayout();
-        auto *pTitle = new QLabel("等效核心参数实时预览 (Core Args Preview):", previewCard);
-        pTitle->setObjectName("cmdPreviewTitle");
-
-        copyCmdBtn = new QPushButton("复制参数", previewCard);
-        copyCmdBtn->setObjectName("btnCopyCmd");
-        copyCmdBtn->setCursor(Qt::PointingHandCursor);
-
-        pHeader->addWidget(pTitle);
-        pHeader->addStretch();
-        pHeader->addWidget(copyCmdBtn);
+        auto *previewLayout = new QHBoxLayout(previewCard);
+        previewLayout->setContentsMargins(12, 6, 12, 6);
+        previewLayout->setSpacing(10);
 
         cmdPreviewEdit = new QLineEdit(previewCard);
         cmdPreviewEdit->setObjectName("commandPreviewText");
         cmdPreviewEdit->setReadOnly(true);
 
-        previewLayout->addLayout(pHeader);
-        previewLayout->addWidget(cmdPreviewEdit);
+        copyCmdBtn = new QPushButton("复制参数", previewCard);
+        copyCmdBtn->setObjectName("btnCopyCmd");
+        copyCmdBtn->setCursor(Qt::PointingHandCursor);
+
+        previewLayout->addWidget(cmdPreviewEdit, 1);
+        previewLayout->addWidget(copyCmdBtn);
         rightLayout->addWidget(previewCard);
     }
 

@@ -35,6 +35,9 @@ public:
 signals:
     void mediaStateChanged(bool hasMedia);
 
+protected:
+    void resizeEvent(QResizeEvent *event) override;
+
 private:
     std::unique_ptr<MediaInfoCardPrivate> const d_ptr;
     Q_DECLARE_PRIVATE(MediaInfoCard)

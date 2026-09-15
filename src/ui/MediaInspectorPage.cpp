@@ -47,7 +47,7 @@ public:
         leftLayout->setContentsMargins(0, 0, 0, 0);
         leftLayout->setSpacing(12);
 
-        auto *title = new QLabel("媒体信息深度解析 (Native ffprobe C API)", leftArea);
+        auto *title = new QLabel("媒体信息深度解析", leftArea);
         title->setObjectName("inspectorPageTitle");
         leftLayout->addWidget(title);
 

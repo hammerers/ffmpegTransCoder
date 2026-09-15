@@ -30,6 +30,7 @@ public:
     QLabel *sizeValLabel{nullptr};
     QLabel *bitrateValLabel{nullptr};
 
+    QImage currentThumbnail;
     bool hasMedia{false};
 
     void initUI() {
@@ -47,52 +48,63 @@ public:
         // 内容视图
         contentWidget = new QWidget(q_ptr);
         auto *mainLayout = new QVBoxLayout(contentWidget);
-        mainLayout->setContentsMargins(12, 12, 12, 12);
-        mainLayout->setSpacing(10);
+        mainLayout->setContentsMargins(14, 12, 14, 12);
+        mainLayout->setSpacing(12);
 
         // 缩略图展示区
         thumbLabel = new QLabel(contentWidget);
         thumbLabel->setObjectName("thumbLabel");
         thumbLabel->setAlignment(Qt::AlignCenter);
-        thumbLabel->setFixedHeight(170);
+        thumbLabel->setFixedHeight(220);
         thumbLabel->setScaledContents(false);
 
-        // 文件名
-        fileNameLabel = new QLabel(contentWidget);
+        // 文件名与路径区
+        auto *titleBox = new QWidget(contentWidget);
+        titleBox->setObjectName("mediaTitleBox");
+        auto *tLayout = new QVBoxLayout(titleBox);
+        tLayout->setContentsMargins(0, 2, 0, 4);
+        tLayout->setSpacing(4);
+
+        fileNameLabel = new QLabel(titleBox);
         fileNameLabel->setObjectName("fileNameLabel");
         fileNameLabel->setWordWrap(true);
 
-        filePathLabel = new QLabel(contentWidget);
+        filePathLabel = new QLabel(titleBox);
         filePathLabel->setObjectName("filePathLabel");
         filePathLabel->setWordWrap(true);
 
-        // 参数网格表
-        auto *grid = new QGridLayout();
-        grid->setHorizontalSpacing(12);
-        grid->setVerticalSpacing(6);
+        tLayout->addWidget(fileNameLabel);
+        tLayout->addWidget(filePathLabel);
 
-        auto addRow = [grid](int row, const QString &title, QLabel* &valLabel, QWidget *parent) {
-            auto *tLabel = new QLabel(title, parent);
+        // 参数网格卡片容器
+        auto *gridCard = new QWidget(contentWidget);
+        gridCard->setObjectName("metaGridContainer");
+        auto *grid = new QGridLayout(gridCard);
+        grid->setContentsMargins(20, 16, 20, 16);
+        grid->setHorizontalSpacing(24);
+        grid->setVerticalSpacing(12);
+
+        auto addRow = [grid, gridCard](int row, const QString &title, QLabel* &valLabel) {
+            auto *tLabel = new QLabel(title, gridCard);
             tLabel->setObjectName("metaTitleLabel");
-            valLabel = new QLabel("-", parent);
+            tLabel->setFixedWidth(100);
+            valLabel = new QLabel("-", gridCard);
             valLabel->setObjectName("metaValueLabel");
             grid->addWidget(tLabel, row, 0);
             grid->addWidget(valLabel, row, 1);
         };
 
-        addRow(0, "分辨率", resValLabel, contentWidget);
-        addRow(1, "视频编码", vCodecValLabel, contentWidget);
-        addRow(2, "音频编码", aCodecValLabel, contentWidget);
-        addRow(3, "视频帧率", fpsValLabel, contentWidget);
-        addRow(4, "总时长", durationValLabel, contentWidget);
-        addRow(5, "文件大小", sizeValLabel, contentWidget);
-        addRow(6, "总码率", bitrateValLabel, contentWidget);
+        addRow(0, "分辨率", resValLabel);
+        addRow(1, "视频编码", vCodecValLabel);
+        addRow(2, "音频编码", aCodecValLabel);
+        addRow(3, "视频帧率", fpsValLabel);
+        addRow(4, "总时长", durationValLabel);
+        addRow(5, "文件大小", sizeValLabel);
+        addRow(6, "总码率", bitrateValLabel);
 
         mainLayout->addWidget(thumbLabel);
-        mainLayout->addWidget(fileNameLabel);
-        mainLayout->addWidget(filePathLabel);
-        mainLayout->addSpacing(4);
-        mainLayout->addLayout(grid);
+        mainLayout->addWidget(titleBox);
+        mainLayout->addWidget(gridCard);
         mainLayout->addStretch();
 
         stackedLayout->addWidget(placeholderWidget);
@@ -100,13 +112,22 @@ public:
         stackedLayout->setCurrentWidget(placeholderWidget);
     }
 
-    void updateInfo(const MediaInfo &info, const QImage &thumbnail) {
-        if (!thumbnail.isNull()) {
-            QPixmap pix = QPixmap::fromImage(thumbnail);
-            thumbLabel->setPixmap(pix.scaled(thumbLabel->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    void refreshThumbnail() {
+        if (!currentThumbnail.isNull()) {
+            QPixmap pix = QPixmap::fromImage(currentThumbnail);
+            QSize targetSize = thumbLabel->size();
+            if (targetSize.width() < 100 || targetSize.height() < 50) {
+                targetSize = QSize(640, 220);
+            }
+            thumbLabel->setPixmap(pix.scaled(targetSize, Qt::KeepAspectRatio, Qt::SmoothTransformation));
         } else {
             thumbLabel->setText("暂无缩略图");
         }
+    }
+
+    void updateInfo(const MediaInfo &info, const QImage &thumbnail) {
+        currentThumbnail = thumbnail;
+        refreshThumbnail();
 
         fileNameLabel->setText(info.fileName);
         filePathLabel->setText(info.filePath);
@@ -168,6 +189,11 @@ void MediaInfoCard::setMedia(const MediaInfo &info, const QImage &thumbnail) {
 
 void MediaInfoCard::clearMedia() {
     setHasMedia(false);
+}
+
+void MediaInfoCard::resizeEvent(QResizeEvent *event) {
+    QWidget::resizeEvent(event);
+    d_ptr->refreshThumbnail();
 }
 
 } // namespace ffmpeg_transform

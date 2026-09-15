@@ -49,7 +49,7 @@ public:
 
     void initUI() {
         q_ptr->setObjectName("mainWindow");
-        q_ptr->setWindowTitle("FFmpeg Transcoder Pro - 高性能音视频转码工作台 (Native C API)");
+        q_ptr->setWindowTitle("FFmpeg Transcoder Pro - 高性能音视频转码工作台");
         q_ptr->resize(1200, 780);
         q_ptr->setMinimumSize(1000, 650);
         q_ptr->setAcceptDrops(true);
@@ -72,7 +72,7 @@ public:
         perfInfoLabel = new QLabel("FFmpeg Transcoder Pro  |  CPU 0.4%  |  RAM 86M / 240M  |  GPU 0.0% 114M + 4M", topBar);
         perfInfoLabel->setObjectName("topPerfLabel");
 
-        topStatusBadge = new QLabel("Native C API 运行中", topBar);
+        topStatusBadge = new QLabel("转码引擎已就绪", topBar);
         topStatusBadge->setObjectName("topStatusBadge");
 
         topLayout->addWidget(appIcon);
@@ -211,7 +211,7 @@ public:
         }
 #endif
         int taskCount = manager.allTasks().size();
-        QString perfStr = QString("FFmpeg Transcoder Pro  |  RAM %1 MB  |  任务队列: %2  |  Native C Engine Ready")
+        QString perfStr = QString("FFmpeg Transcoder Pro  |  RAM %1 MB  |  任务队列: %2  |  工作台已就绪")
             .arg(ramMB).arg(taskCount);
         perfInfoLabel->setText(perfStr);
     }

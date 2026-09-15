@@ -46,10 +46,10 @@ public:
         auto *titleLayout = new QVBoxLayout();
         titleLayout->setSpacing(4);
 
-        auto *titleLabel = new QLabel("FFmpeg Transcoder Pro 6.0 & Native C Engine", bannerCard);
+        auto *titleLabel = new QLabel("FFmpeg Transcoder Pro 6.0", bannerCard);
         titleLabel->setObjectName("homeBannerTitle");
 
-        auto *subtitleLabel = new QLabel("全链路原生 FFmpeg C API 深度集成，高性能硬件加速与专业级音视频压制工作台", bannerCard);
+        auto *subtitleLabel = new QLabel("全链路音视频流水线深度集成，高性能硬件加速与专业级压制工作台", bannerCard);
         subtitleLabel->setObjectName("homeBannerSubtitle");
 
         titleLayout->addWidget(titleLabel);
@@ -107,7 +107,7 @@ public:
         };
 
         QStringList archItems = {
-            "全链路原生 FFmpeg C API 直调，严禁伪管道封装",
+            "全链路音视频流水线直调，严禁伪管道封装",
             "解复用 -> 解码 -> 缩放 -> 重采样 -> FIFO缓冲 -> 编码复用",
             "严格遵循 Pimpl 设计模式，组件头文件无私有成员泄露",
             "QSS 动态样式彻底解耦，属性驱动状态渲染，零硬编码",
@@ -117,7 +117,7 @@ public:
 
         QStringList specItems = {
             "视频编码器: H.264 (libx264), H.265 (libx265), Stream Copy",
-            "音频编码器: AAC (Native), MP3 (Native), PCM",
+            "音频编码器: AAC, MP3, PCM",
             "封装容器: MP4, MKV, MOV, AVI, MP3, AAC",
             "画质控制: CRF 视觉无损因子 (18-35) 与智能码率模式",
             "硬件加速接口: DXVA2 / D3D11VA / NVENC 预留 Ready"
