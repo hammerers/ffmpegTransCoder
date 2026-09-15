@@ -182,8 +182,14 @@
   2. **析构输出句柄解除写锁后再删除**：在 `TranscodeEngine` 的取消与失败分支中，显式调用 `outFmtCtx.reset()` 立即释放 `avio` 文件句柄，彻底解开 Windows 文件锁，然后再调用 `QFile::remove(cfg.outputPath)`，保证 100% 成功删除；
   3. **任务移除链路增加残留空文件兜底扫描**：在 `removeTask`、`cancelTask` 和 `clearAllTasks` 中，对未正常完成的任务主动探查其 `outputPath`，若发现 0 字节空文件则一律彻底清理，保障磁盘绝对干净。
 
-### 12. 架构规范延续性
-- 所有修改 100% 遵循 `qt-component-design` 规范：`FilePrepPage` 内部完全使用 Pimpl 模式与 `theme.qss` 解耦；
+### 12. 起始页面精简化：移除顶部宣传横幅卡片
+- **需求与决策**：用户希望进一步净化视觉空间，去除起始页面（`HomePage`）顶部的横幅展示卡片（原包含 `TRANSCODER` 徽章、`FFmpeg Transcoder Pro 6.0` 大标题、副标题与内存清理按钮）。
+- **重构落地**：
+  - 在 `HomePage.cpp` 中彻底移除顶部 `bannerCard` 控件及其全部布局代码，并精简移除不再需要的内存清理连接；
+  - 起始页面直接以【架构与设计哲学】、【转码引擎状态与规格】、【操作指南与提示】三大矩阵卡片展开，排版更加紧凑、聚焦，去除了不必要的视觉装饰。
+
+### 13. 架构规范延续性
+- 所有修改 100% 遵循 `qt-component-design` 规范：`FilePrepPage` / `HomePage` 内部完全使用 Pimpl 模式与 `theme.qss` 解耦；
 - 杜绝任何 C++ 硬编码内联样式；
 - 杜绝使用任何 Python 脚本修改代码；
 - 文档与代码全域严守保密与原创规范，未包含任何外部无关开源项目的名称与引用。

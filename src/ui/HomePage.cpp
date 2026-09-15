@@ -6,18 +6,11 @@
 #include <QFrame>
 #include <QScrollArea>
 
-#ifdef Q_OS_WIN
-#include <windows.h>
-#include <psapi.h>
-#endif
-
 namespace ffmpeg_transform {
 
 class HomePagePrivate {
 public:
     HomePage *q_ptr{nullptr};
-    QPushButton *cleanMemBtn{nullptr};
-    QLabel *memStatusLabel{nullptr};
 
     void initUI() {
         q_ptr->setObjectName("homePage");
@@ -32,39 +25,7 @@ public:
         mainLayout->setContentsMargins(24, 20, 24, 20);
         mainLayout->setSpacing(20);
 
-        // 1. 顶部大横幅卡片 (Banner Card)
-        auto *bannerCard = new QWidget(container);
-        bannerCard->setObjectName("homeBannerCard");
-        auto *bannerLayout = new QHBoxLayout(bannerCard);
-        bannerLayout->setContentsMargins(20, 18, 20, 18);
-        bannerLayout->setSpacing(16);
-
-        auto *iconLabel = new QLabel("TRANSCODER", bannerCard);
-        iconLabel->setObjectName("homeBannerIcon");
-        iconLabel->setAlignment(Qt::AlignCenter);
-
-        auto *titleLayout = new QVBoxLayout();
-        titleLayout->setSpacing(4);
-
-        auto *titleLabel = new QLabel("FFmpeg Transcoder Pro 6.0", bannerCard);
-        titleLabel->setObjectName("homeBannerTitle");
-
-        auto *subtitleLabel = new QLabel("全链路音视频流水线深度集成，高性能硬件加速与专业级压制工作台", bannerCard);
-        subtitleLabel->setObjectName("homeBannerSubtitle");
-
-        titleLayout->addWidget(titleLabel);
-        titleLayout->addWidget(subtitleLabel);
-
-        cleanMemBtn = new QPushButton("清理占用", bannerCard);
-        cleanMemBtn->setObjectName("homeCleanBtn");
-        cleanMemBtn->setCursor(Qt::PointingHandCursor);
-
-        bannerLayout->addWidget(iconLabel);
-        bannerLayout->addLayout(titleLayout, 1);
-        bannerLayout->addWidget(cleanMemBtn);
-        mainLayout->addWidget(bannerCard);
-
-        // 2. 三列矩阵信息卡片 (Three Columns)
+        // 三列矩阵信息卡片 (Three Columns)
         auto *columnsLayout = new QHBoxLayout();
         columnsLayout->setSpacing(16);
 
@@ -143,14 +104,6 @@ public:
         auto *rootLayout = new QVBoxLayout(q_ptr);
         rootLayout->setContentsMargins(0, 0, 0, 0);
         rootLayout->addWidget(scroll);
-
-        // 内存清理按钮功能
-        QObject::connect(cleanMemBtn, &QPushButton::clicked, [this]() {
-#ifdef Q_OS_WIN
-            SetProcessWorkingSetSize(GetCurrentProcess(), (SIZE_T)-1, (SIZE_T)-1);
-#endif
-            cleanMemBtn->setText("已释放");
-        });
     }
 };
 
