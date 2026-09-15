@@ -167,7 +167,22 @@
   1. **校正运行计数口径**：`running` 计数仅统计处于真正转码状态的 `TaskState::Converting` 任务；等待中（`Pending`）与后台元数据分析（`Analyzing`）均不计入运行中，完全符合用户交互直觉。
   2. **建立全生命周期状态信号链**：在 `TranscodeTaskManager::addTask` 中，全面绑定 `task->stateChanged` 信号并向上派发 `taskStateChanged`，确保任务从分析完成恢复待命、启动转换、暂停、恢复、完成或取消的每一次状态变更都能即时驱动 UI 统计数值刷新。
 
-### 11. 架构规范延续性
+### 11. 队列删除任务后磁盘产生空 MP4 文件缺陷的排查与根治
+- **用户反馈与现象**：用户从编码队列中点击删除视频后，在原视频所在目录发现被创建了一个 0 字节的空 `.mp4` 文件。
+- **深度排查与双重根本原因**：
+  1. **队列自动调度缺乏激活守卫 (`isQueueActive`)**：
+     - 当用户点击删除按钮调用 `removeTask(taskId)` 时，内部无条件调用了 `scheduleNext()`；
+     - 原 `scheduleNext()` 未校验“当前队列是否处于用户主动启动的运行态”，而是无脑扫描剩余处于 `Pending`（等待）状态的任务并直接调用 `startTaskInternal()` 启动转码；
+     - 这导致用户删除其中一个任务时，紧随其后的另一个排队任务被系统在后台悄悄启动，底层的 `avio_open(..., AVIO_FLAG_WRITE)` 瞬间在磁盘上创建并打开了目标 `.mp4` 文件；
+  2. **Windows 平台文件写锁导致清理失败**：
+     - 当用户随后删除该任务触发中止时，`TranscodeEngine` 试图通过 `QFile::remove(cfg.outputPath)` 删除未完成文件，但此时 `outFmtCtx` 尚在其自身作用域内，底层 `avio_closep(&outFmtCtx->pb)` 尚未执行；
+     - 在 Windows 操作系统下，处于写打开状态的文件具有独占锁，`QFile::remove` 失败静默返回，导致空文件残留在磁盘上。
+- **彻底根治方案**：
+  1. **引入队列运行状态守卫**：在 `TranscodeTaskManagerPrivate` 中引入 `isQueueActive` 标志，仅在用户显式点击【开始】或【恢复】时置为 true，点击【暂停】、【停止】或未开始时均为 false。在 `scheduleNext()` 顶部增加守卫 `if (!isQueueActive) return;`，彻底杜绝在未运行状态下因删除、取消任务而暗中启动其他任务；
+  2. **析构输出句柄解除写锁后再删除**：在 `TranscodeEngine` 的取消与失败分支中，显式调用 `outFmtCtx.reset()` 立即释放 `avio` 文件句柄，彻底解开 Windows 文件锁，然后再调用 `QFile::remove(cfg.outputPath)`，保证 100% 成功删除；
+  3. **任务移除链路增加残留空文件兜底扫描**：在 `removeTask`、`cancelTask` 和 `clearAllTasks` 中，对未正常完成的任务主动探查其 `outputPath`，若发现 0 字节空文件则一律彻底清理，保障磁盘绝对干净。
+
+### 12. 架构规范延续性
 - 所有修改 100% 遵循 `qt-component-design` 规范：`FilePrepPage` 内部完全使用 Pimpl 模式与 `theme.qss` 解耦；
 - 杜绝任何 C++ 硬编码内联样式；
 - 杜绝使用任何 Python 脚本修改代码；

@@ -305,6 +305,11 @@ public:
         ret = avformat_write_header(outFmtCtx.get(), nullptr);
         if (ret < 0) {
             updateState(TaskState::Failed);
+            outFmtCtx.reset();
+            inFmtCtx.reset();
+            if (QFile::exists(cfg.outputPath)) {
+                QFile::remove(cfg.outputPath);
+            }
             emit q_ptr->finished(false, QString("写入媒体文件头失败: %1").arg(ffmpegErrorToString(ret)));
             return;
         }
@@ -533,10 +538,17 @@ public:
         // 7. 完成状态判定
         if (isCanceled) {
             updateState(TaskState::Canceled);
-            // 删除未完成的文件
-            QFile::remove(cfg.outputPath);
+            // 必须在删除文件前释放并关闭输出格式上下文，解开 Windows 文件写锁
+            outFmtCtx.reset();
+            inFmtCtx.reset();
+            if (QFile::exists(cfg.outputPath)) {
+                QFile::remove(cfg.outputPath);
+            }
             emit q_ptr->finished(false, "用户已中止转码");
         } else {
+            outFmtCtx.reset();
+            inFmtCtx.reset();
+
             currentProgress.percent = 100.0;
             currentProgress.etaSec = 0;
             emit q_ptr->progressUpdated(currentProgress);

@@ -5,6 +5,8 @@
 #include <QThreadPool>
 #include <QtConcurrent>
 #include <QMap>
+#include <QFile>
+#include <QFileInfo>
 #include <QDebug>
 #include <map>
 
@@ -16,6 +18,7 @@ public:
     QList<TranscodeTask*> tasks;
     std::map<QString, std::unique_ptr<TranscodeEngine>> activeEngines;
     int maxConcurrent{1};
+    bool isQueueActive{false};
 
     ~TranscodeTaskManagerPrivate() {
         for (auto &pair : activeEngines) {
@@ -62,6 +65,10 @@ public:
     }
 
     void scheduleNext() {
+        if (!isQueueActive) {
+            return;
+        }
+
         int runningCount = 0;
         for (auto *t : tasks) {
             if (t->state() == TaskState::Converting) {
@@ -94,6 +101,7 @@ public:
         }
 
         if (!anyPendingOrRunning && !tasks.isEmpty()) {
+            isQueueActive = false;
             emit q_ptr->allTasksCompleted();
         }
     }
@@ -161,22 +169,43 @@ void TranscodeTaskManager::removeTask(const QString &taskId) {
     for (int i = 0; i < d->tasks.size(); ++i) {
         if (d->tasks[i]->id() == taskId) {
             auto *t = d->tasks.takeAt(i);
+            if (t->state() != TaskState::Completed) {
+                QString outPath = t->config().outputPath;
+                if (!outPath.isEmpty() && QFile::exists(outPath)) {
+                    QFileInfo fi(outPath);
+                    if (fi.size() == 0 || t->state() == TaskState::Canceled || t->state() == TaskState::Pending || t->state() == TaskState::Failed) {
+                        QFile::remove(outPath);
+                    }
+                }
+            }
             emit taskRemoved(taskId);
             t->deleteLater();
             break;
         }
     }
-    d->scheduleNext();
+    if (d->isQueueActive) {
+        d->scheduleNext();
+    }
 }
 
 void TranscodeTaskManager::clearAllTasks() {
     Q_D(TranscodeTaskManager);
     cancelAll();
     for (auto *t : d->tasks) {
+        if (t->state() != TaskState::Completed) {
+            QString outPath = t->config().outputPath;
+            if (!outPath.isEmpty() && QFile::exists(outPath)) {
+                QFileInfo fi(outPath);
+                if (fi.size() == 0 || t->state() == TaskState::Canceled || t->state() == TaskState::Pending || t->state() == TaskState::Failed) {
+                    QFile::remove(outPath);
+                }
+            }
+        }
         emit taskRemoved(t->id());
         t->deleteLater();
     }
     d->tasks.clear();
+    d->isQueueActive = false;
 }
 
 QList<TranscodeTask*> TranscodeTaskManager::allTasks() const {
@@ -192,6 +221,7 @@ TranscodeTask* TranscodeTaskManager::getTask(const QString &taskId) const {
 
 void TranscodeTaskManager::startAll() {
     Q_D(TranscodeTaskManager);
+    d->isQueueActive = true;
     for (auto *t : d->tasks) {
         if (t->state() == TaskState::Paused) {
             resumeTask(t->id());
@@ -204,6 +234,7 @@ void TranscodeTaskManager::startAll() {
 
 void TranscodeTaskManager::pauseAll() {
     Q_D(TranscodeTaskManager);
+    d->isQueueActive = false;
     for (auto &pair : d->activeEngines) {
         if (pair.second) pair.second->pause();
     }
@@ -211,6 +242,7 @@ void TranscodeTaskManager::pauseAll() {
 
 void TranscodeTaskManager::resumeAll() {
     Q_D(TranscodeTaskManager);
+    d->isQueueActive = true;
     for (auto &pair : d->activeEngines) {
         if (pair.second) pair.second->resume();
     }
@@ -219,6 +251,7 @@ void TranscodeTaskManager::resumeAll() {
 
 void TranscodeTaskManager::cancelAll() {
     Q_D(TranscodeTaskManager);
+    d->isQueueActive = false;
     for (auto &pair : d->activeEngines) {
         if (pair.second) pair.second->cancel();
     }
@@ -226,6 +259,13 @@ void TranscodeTaskManager::cancelAll() {
     for (auto *t : d->tasks) {
         if (t->state() == TaskState::Pending || t->state() == TaskState::Converting || t->state() == TaskState::Paused) {
             t->setState(TaskState::Canceled);
+            QString outPath = t->config().outputPath;
+            if (!outPath.isEmpty() && QFile::exists(outPath)) {
+                QFileInfo fi(outPath);
+                if (fi.size() == 0) {
+                    QFile::remove(outPath);
+                }
+            }
         }
     }
 }
@@ -266,8 +306,17 @@ void TranscodeTaskManager::cancelTask(const QString &taskId) {
     auto *task = getTask(taskId);
     if (task && task->state() != TaskState::Completed) {
         task->setState(TaskState::Canceled);
+        QString outPath = task->config().outputPath;
+        if (!outPath.isEmpty() && QFile::exists(outPath)) {
+            QFileInfo fi(outPath);
+            if (fi.size() == 0) {
+                QFile::remove(outPath);
+            }
+        }
     }
-    d->scheduleNext();
+    if (d->isQueueActive) {
+        d->scheduleNext();
+    }
 }
 
 void TranscodeTaskManager::setMaxConcurrentTasks(int count) {
