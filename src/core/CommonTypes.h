@@ -132,6 +132,31 @@ enum class QualityMode {
     Bitrate     // 目标比特率模式
 };
 
+enum class HwAccelMode {
+    Auto,       // 自动探测 (NVENC > QSV > CPU)
+    NVENC,      // NVIDIA NVENC 硬件加速
+    QSV,        // Intel QuickSync 硬件加速
+    CPU         // 纯 CPU 软件编解码
+};
+
+inline const char* hwAccelModeToString(HwAccelMode mode) {
+    switch (mode) {
+    case HwAccelMode::Auto: return "Auto";
+    case HwAccelMode::NVENC: return "NVENC";
+    case HwAccelMode::QSV: return "QSV";
+    case HwAccelMode::CPU: return "CPU";
+    }
+    return "Auto";
+}
+
+struct DelogoConfig {
+    bool enabled{false};
+    int x{30};
+    int y{30};
+    int width{160};
+    int height{60};
+};
+
 struct TranscodeConfig {
     QString inputPath;
     QString outputPath;
@@ -157,6 +182,9 @@ struct TranscodeConfig {
 
     QString preset{"medium"};      // ultrafast, superfast, veryfast, faster, fast, medium, slow
     int threads{0};               // 0 = 自动
+
+    HwAccelMode hwAccel{HwAccelMode::Auto};
+    DelogoConfig delogo;
 };
 
 struct TranscodeProgress {

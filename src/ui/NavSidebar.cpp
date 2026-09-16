@@ -72,6 +72,7 @@ public:
         createBtn(2, "准备文件");
         createBtn(3, "参数面板");
         createBtn(4, "媒体信息");
+        createBtn(5, "实时检视");
 
         mainLayout->addStretch();
 

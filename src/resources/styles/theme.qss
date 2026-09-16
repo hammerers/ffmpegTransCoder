@@ -952,4 +952,91 @@ QSplitter::handle:hover {
     padding: 16px;
 }
 
+/* 实时双分屏画面对比检视页面 */
+#liveMonitorPage {
+    background-color: #14161d;
+}
 
+#liveMonitorTitle {
+    font-size: 16px;
+    font-weight: 700;
+    color: #38bdf8;
+}
+
+#liveMonitorSubtitle {
+    font-size: 12px;
+    color: #94a3b8;
+}
+
+#liveHwBadge {
+    background-color: #0f291e;
+    color: #34d399;
+    border: 1px solid #059669;
+    border-radius: 12px;
+    padding: 4px 12px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+#btnCompareModeSide, #btnCompareModeCurtain, #btnCompareModeProcessed {
+    background-color: #222632;
+    color: #94a3b8;
+    border: 1px solid #333a4c;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+#btnCompareModeSide:hover, #btnCompareModeCurtain:hover, #btnCompareModeProcessed:hover {
+    background-color: #2a3040;
+    border-color: #475569;
+    color: #ffffff;
+}
+
+#btnCompareModeSide:checked, #btnCompareModeCurtain:checked, #btnCompareModeProcessed:checked {
+    background-color: #0369a1;
+    border: 1px solid #38bdf8;
+    color: #ffffff;
+}
+
+#videoCompareWidget {
+    background-color: #090a0f;
+    border: 1px solid #232836;
+    border-radius: 8px;
+}
+
+#liveFilterCard {
+    background-color: #181b24;
+    border: 1px solid #282e3e;
+    border-radius: 8px;
+}
+
+#checkLiveDelogo {
+    color: #e2e8f0;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+#liveSpinLabel {
+    color: #94a3b8;
+    font-size: 12px;
+}
+
+#liveSpinBox {
+    background-color: #14161d;
+    border: 1px solid #333a4c;
+    border-radius: 4px;
+    color: #e2e8f0;
+    padding: 2px 6px;
+    min-width: 60px;
+}
+
+#liveSpinBox:focus {
+    border-color: #38bdf8;
+}
+
+#liveHintLabel {
+    color: #64748b;
+    font-size: 11px;
+}

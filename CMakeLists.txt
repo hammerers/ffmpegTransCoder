@@ -90,6 +90,10 @@ add_executable(FFmpegVideoTransform WIN32
     src/ui/TaskItemWidget.cpp
     src/ui/TaskListView.h
     src/ui/TaskListView.cpp
+    src/ui/VideoCompareWidget.h
+    src/ui/VideoCompareWidget.cpp
+    src/ui/LiveMonitorPage.h
+    src/ui/LiveMonitorPage.cpp
     src/resources/app.qrc
 )
 

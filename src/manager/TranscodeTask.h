@@ -46,6 +46,7 @@ signals:
     void thumbnailLoaded(const QImage &image);
     void mediaInfoLoaded(const MediaInfo &info);
     void errorOccurred(const QString &message);
+    void frameRendered(const QImage &originFrame, const QImage &processedFrame, double ptsSec);
 
 private:
     std::unique_ptr<TranscodeTaskPrivate> const d_ptr;

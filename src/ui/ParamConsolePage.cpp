@@ -560,14 +560,20 @@ TranscodeConfig ParamConsolePage::config() const {
     cfg.preset = presText;
 
     cfg.audioCodec = static_cast<AudioCodecType>(d->audioCodecCombo->currentData().toInt());
-    cfg.audioBitrate = d->audioBitrateCombo->currentData().toInt();
-    cfg.audioSampleRate = d->sampleRateCombo->currentData().toInt();
+    int hwIdx = d->encoderTypeCombo->currentIndex();
+    if (hwIdx == 1) cfg.hwAccel = HwAccelMode::NVENC;
+    else if (hwIdx == 2) cfg.hwAccel = HwAccelMode::QSV;
+    else cfg.hwAccel = HwAccelMode::Auto;
 
     return cfg;
 }
 
 void ParamConsolePage::setConfig(const TranscodeConfig &cfg) {
     Q_D(ParamConsolePage);
+    if (cfg.hwAccel == HwAccelMode::NVENC) d->encoderTypeCombo->setCurrentIndex(1);
+    else if (cfg.hwAccel == HwAccelMode::QSV) d->encoderTypeCombo->setCurrentIndex(2);
+    else d->encoderTypeCombo->setCurrentIndex(0);
+
     int fmtIdx = d->formatCombo->findData(cfg.containerFormat);
     if (fmtIdx >= 0) d->formatCombo->setCurrentIndex(fmtIdx);
 

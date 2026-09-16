@@ -66,6 +66,7 @@ signals:
     void taskAdded(TranscodeTask *task);
     void taskRemoved(const QString &taskId);
     void taskStateChanged(TranscodeTask *task, TaskState state);
+    void taskFrameRendered(TranscodeTask *task, const QImage &originFrame, const QImage &processedFrame, double ptsSec);
     void allTasksCompleted();
 
 private:

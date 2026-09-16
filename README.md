@@ -15,40 +15,48 @@
   - 动态徽标气泡实时联动活跃与排队任务总数。
 - **顶部实时系统状态监视条**：
   - 毫秒级轮询进程 CPU、工作集物理内存以及 GPU 显存环境状态。
-- **五大多媒体处理专业视图**：
+- **六大多媒体处理专业视图**：
   - **起始页面 (`HomePage`)**：品牌横幅卡片、系统内存一键释放、系统架构/引擎特性/操作指南三大卡片；
   - **编码队列 (`QueuePage`)**：彩色控制动作菜单（开始、暂停、恢复、停止、移除、重置、定位）、全局计数看板、8 列多维度任务列表头与拖拽队列；
   - **准备文件 (`FilePrepPage`)**：批量文件与文件夹递归扫描导入、精细化路径表格、一键移入编码队列；
-  - **参数面板 (`ParamConsolePage`)**：分类参数导航、`[-preset]` / `[-profile:v]` / `[-tune]` / `[-gpu]` 命令行等效标识、实时等效 FFmpeg 指令终端预览与一键复制；
-  - **媒体信息 (`MediaInspectorPage`)**：多维音频/视频流元数据深度解析与关键帧 RGB 缩略图画廊。
+  - **参数面板 (`ParamConsolePage`)**：分类参数导航、`[-preset]` / `[-profile:v]` / `[-tune]` / `[-gpu]` 命令行等效标识、实时等效 FFmpeg 指令终端预览与一键批量覆盖应用；
+  - **媒体信息 (`MediaInspectorPage`)**：多维音频/视频流元数据深度解析与关键帧 RGB 缩略图画廊；
+  - **实时检视 (`LiveMonitorPage`)**：转码中实时双分屏对比播放器，支持左右并排、卷帘鼠标拖拽对比、PTS 时钟打点与内存去水印算法实时调控。
 
 ### 2. 媒体信息解析与高清缩略图截取
 - **多维流元数据解析**：自动解析容器格式（MP4、MKV、MOV、AVI、FLV、TS、WebM 等）、总时长、整体码率、文件大小、音视频流编码类型（H.264/AVC、H.265/HEVC、AAC、MP3 等）、分辨率、像素格式（如 YUV420P）、帧率及声道采样率。
 - **智能关键帧缩略图提取**：利用 `av_seek_frame` 避开片头黑屏，通过 `sws_scale` 转换为高质量 RGB24 图像并动态缓存渲染。
 
 ### 3. 全链路 FFmpeg C API 原生转码流水线
-- **底层 C 函数驱动**：
+- **底层 C 函数驱动（不可替代的 C API 优势）**：
   - 解封装：`avformat_open_input` / `avformat_find_stream_info`
-  - 解码：`avcodec_send_packet` / `avcodec_receive_frame`
+  - 解码：`avcodec_send_packet` / `avcodec_receive_frame` 提取原始未压缩 `AVFrame` 裸流
+  - **内存级图像滤镜插件**：直接在 `AVFrame` YUV420P 内存步长（`linesize`）上执行动态去水印算法与双线性插值平滑处理，打破 CLI 滤镜链开销
+  - **实时转码画面提取**：转码过程中以 25 FPS 限速节流提取原画与压制后图像，直接送入 GUI 视口双分屏实时渲染
   - 图像处理：`sws_scale`（支持任意目标分辨率缩放与色彩空间转换）
   - 音频处理：`swr_convert`（采样率重采样、声道重映射）+ `AVAudioFifo`（平滑音频帧缓存）
-  - 编码：`avcodec_send_frame` / `avcodec_receive_packet`（支持 `libx264` / `libx265` / `aac` / `mp3`）
+  - **音频排空与对齐补零（Pad Silence）**：循环排空 `swr_get_delay` 累积延迟，并将末尾不足 1024 样本的残帧通过静音对齐填充，彻底根治 AAC 编码断音
+  - **硬件加速探测与自动降级**：优先探测并开启 GPU 硬件编码（NVIDIA NVENC / Intel QSV），若硬件驱动缺失或初始化失败，无缝降级至 CPU 软件编码器（`libx264` / `libx265`）
+  - **重构物理 PTS/DTS 时间戳引擎**：废除序列自增伪时间戳，基于输入流真实 `time_base` 与 `best_effort_timestamp` 进行 `av_rescale_q_rnd` 动态时钟对齐，保障单调递增，平滑处理 VFR 转 CFR
+  - 编码：`avcodec_send_frame` / `avcodec_receive_packet`
   - 封装：`avformat_write_header` / `av_interleaved_write_frame` / `av_write_trailer`
-  - 时间戳精准同步：`av_packet_rescale_ts` 消除音画不同步。
-- **视频转音频提取**：一键提取 MP3 (支持 128k~320kbps 录音室级) / AAC 高保真音频。
-- **丰富的预设与专家调参**：
-  - 快速预设：通用 MP4 (H.264+AAC)、高效 MKV (H.265)、提取 MP3/AAC、Apple MOV、专家模式。
-  - 参数调节：分辨率（原始/4K/1080P/720P/480P）、帧率（原始/60/30/24 fps）、CRF 恒定画质（18~35）与目标码率、编码速度预设（ultrafast ~ slow）。
 
-### 4. 多任务批处理队列与实时状态监测
+### 4. 实时双分屏画面对比播放检视器 (`VideoCompareWidget`)
+- **双分屏对比播放**：转码进行时实时提取解码原画与压制画面，同步进行渲染对比；
+- **左右并排模式 (Side by Side)**：同屏并排展示原画与压缩画面，直观对比色彩、锐度与细节；
+- **无级卷帘对比模式 (Curtain Split)**：支持用户使用鼠标拖拽中央分割竖线，实现单帧画面的无缝卷帘对比；
+- **成品画质模式 (Processed Only)**：全尺寸检视最终编码输出画面质量；
+- **动态 OSD 状态指示**：实时叠加精确到毫秒的物理 PTS 时间码徽标、硬件加速状态以及去水印 ROI 选区高亮边界。
+
+### 5. 多任务批处理队列与实时状态监测
 - **批处理队列调度**：支持多文件同时拖拽导入，队列化安全调度。
 - **实时性能指标**：转换百分比、编码帧率 (FPS)、实时转码倍速 (如 15.1x / 120x)、已耗时与预估剩余时间 (ETA)。
 - **精细化状态机控制**：支持单任务或全部任务的 **开始、暂停、继续、取消、移除**；转码完成后支持一键在资源管理器中定位输出文件。
 
-### 5. 现代化客户端交互与专业暗黑视觉体系
+### 6. 现代化客户端交互与专业暗黑视觉体系
 - **沉浸式暗黑设计语言与零 Emoji 纯净排版**：
   - 采用现代专业工作台标志性的深空暗夜色底（`#14161d`）与电气青蓝（`#38bdf8`）点缀，完全移除 Emoji，视觉纯净干练。
-  - **特色【等效 FFmpeg 核心参数实时预览】**：下方设立专属代码终端框，任何参数调节均实时生成等效的 FFmpeg 命令行参数并支持一键复制，让进阶压制细节透明可控。
+  - **特色【等效 FFmpeg 核心参数实时预览】**：下方设立专属代码终端框，任何参数调节均实时生成等效的 FFmpeg 命令行参数并支持一键复制与批量应用。
 - **严格遵循 Pimpl 设计模式**：所有组件对外头文件隐藏实现细节，指针生命周期安全可控。
 - **QSS 动态样式解耦**：C++ 代码无硬编码内联样式，统一通过 `Q_PROPERTY` 暴露状态属性，配合暗色影视风格主题表（`theme.qss`）实现属性选择器动态换肤与渲染刷新。
 
@@ -66,6 +74,8 @@ graph TD
         FilePrepPage["FilePrepPage (文件批处理工作区)"]
         ParamConsolePage["ParamConsolePage (参数面板与 CLI 预览)"]
         MediaInspectorPage["MediaInspectorPage (媒体信息探测与缩略图)"]
+        LiveMonitorPage["LiveMonitorPage (实时双分屏检视工作区)"]
+        VideoCompareWidget["VideoCompareWidget (并排/卷帘分屏视口)"]
     end
 
     subgraph Manager ["Task Management Layer"]
@@ -76,7 +86,7 @@ graph TD
     subgraph CoreEngine ["Transcoder Core Engine (FFmpeg C API)"]
         MetadataExtractor["MetadataExtractor (元数据解析)"]
         ThumbnailExtractor["ThumbnailExtractor (关键帧 RGB 提取)"]
-        TranscodeEngine["TranscodeEngine (解封装->解码->Sws/Swr->编码->封装)"]
+        TranscodeEngine["TranscodeEngine (解封装->解码->内存滤镜->Sws/Swr->编码->封装)"]
         FFmpegUtils["FFmpegUtils (RAII 智能资源管控)"]
     end
 
@@ -87,6 +97,8 @@ graph TD
     TaskManager -->|提取缩略图| ThumbnailExtractor
     TaskManager -->|后台多线程转码| TranscodeEngine
     TranscodeEngine -->|进度/FPS/ETA 信号| TaskEntity
+    TranscodeEngine -->|转码双帧实时数据| LiveMonitorPage
+    LiveMonitorPage -->|原画/成品双帧更新| VideoCompareWidget
     TaskEntity -->|状态流转绑定| QueuePage
     MetadataExtractor -->|显示参数| MediaInspectorPage
 ```
@@ -123,6 +135,8 @@ ffmpeg_transform/
 │   │   ├── FilePrepPage.h / .cpp          # 准备文件工作区 (递归扫描/文件表格)
 │   │   ├── ParamConsolePage.h / .cpp      # 参数面板 (CLI 等效标签/终端预览)
 │   │   ├── MediaInspectorPage.h / .cpp    # 媒体信息深度检视与缩略图画廊
+│   │   ├── LiveMonitorPage.h / .cpp       # 实时对比检视工作区 (Pimpl)
+│   │   ├── VideoCompareWidget.h / .cpp    # 实时双分屏对比播放器 (并排/卷帘/OSD)
 │   │   ├── DropAreaWidget.h / .cpp        # 拖拽放置控件
 │   │   ├── MediaInfoCard.h / .cpp         # 元数据与缩略图卡片
 │   │   ├── PresetPanel.h / .cpp           # 常用预设面板

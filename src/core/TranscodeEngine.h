@@ -59,6 +59,7 @@ signals:
     void stateChanged(TaskState newState);
     void progressUpdated(const TranscodeProgress &progress);
     void finished(bool success, const QString &message);
+    void frameRendered(const QImage &originFrame, const QImage &processedFrame, double ptsSec);
 
 private:
     std::unique_ptr<TranscodeEnginePrivate> const d_ptr;

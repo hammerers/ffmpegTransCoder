@@ -8,9 +8,91 @@
 #include <atomic>
 #include <mutex>
 #include <condition_variable>
-#include <algorithm>
+#include <cstring>
 
 namespace ffmpeg_transform {
+
+// 内存级图像算法：YUV420P 空间去水印 / 区域平滑双线性插值
+static void applyDelogoYuv(AVFrame *frame, const DelogoConfig &cfg) {
+    if (!frame || !cfg.enabled || cfg.width <= 0 || cfg.height <= 0) return;
+
+    int fw = frame->width;
+    int fh = frame->height;
+    int rx = std::clamp(cfg.x, 0, fw - 2);
+    int ry = std::clamp(cfg.y, 0, fh - 2);
+    int rw = std::clamp(cfg.width, 2, fw - rx);
+    int rh = std::clamp(cfg.height, 2, fh - ry);
+
+    // 1. 处理 Y 亮度平面
+    uint8_t *yData = frame->data[0];
+    int yPitch = frame->linesize[0];
+
+    for (int y = ry; y < ry + rh; ++y) {
+        float ty = static_cast<float>(y - ry) / static_cast<float>(rh);
+        uint8_t topVal = yData[ry * yPitch + rx];
+        uint8_t botVal = yData[(ry + rh - 1) * yPitch + rx];
+
+        for (int x = rx; x < rx + rw; ++x) {
+            float tx = static_cast<float>(x - rx) / static_cast<float>(rw);
+            uint8_t leftVal = yData[y * yPitch + rx];
+            uint8_t rightVal = yData[y * yPitch + (rx + rw - 1)];
+
+            float horiz = (1.0f - tx) * leftVal + tx * rightVal;
+            float vert = (1.0f - ty) * topVal + ty * botVal;
+            yData[y * yPitch + x] = static_cast<uint8_t>((horiz + vert) * 0.5f);
+        }
+    }
+
+    // 2. 处理 U/V 色度平面 (尺寸减半)
+    int rxHalf = rx / 2;
+    int ryHalf = ry / 2;
+    int rwHalf = std::max(1, rw / 2);
+    int rhHalf = std::max(1, rh / 2);
+
+    for (int plane = 1; plane <= 2; ++plane) {
+        uint8_t *uvData = frame->data[plane];
+        int uvPitch = frame->linesize[plane];
+        for (int y = ryHalf; y < ryHalf + rhHalf; ++y) {
+            float ty = static_cast<float>(y - ryHalf) / static_cast<float>(rhHalf);
+            for (int x = rxHalf; x < rxHalf + rwHalf; ++x) {
+                float tx = static_cast<float>(x - rxHalf) / static_cast<float>(rwHalf);
+                uint8_t leftVal = uvData[y * uvPitch + rxHalf];
+                uint8_t rightVal = uvData[y * uvPitch + (rxHalf + rwHalf - 1)];
+                uint8_t topVal = uvData[ryHalf * uvPitch + x];
+                uint8_t botVal = uvData[(ryHalf + rhHalf - 1) * uvPitch + x];
+
+                float horiz = (1.0f - tx) * leftVal + tx * rightVal;
+                float vert = (1.0f - ty) * topVal + ty * botVal;
+                uvData[y * uvPitch + x] = static_cast<uint8_t>((horiz + vert) * 0.5f);
+            }
+        }
+    }
+}
+
+// 快速轻量提取预览 QImage 用于视口实时双分屏渲染
+static QImage avFrameToPreviewImage(AVFrame *frame, SwsContext *&cachedSws, int &cachedW, int &cachedH, int targetW, int targetH) {
+    if (!frame || frame->width <= 0 || frame->height <= 0) return {};
+
+    if (!cachedSws || cachedW != frame->width || cachedH != frame->height) {
+        if (cachedSws) sws_freeContext(cachedSws);
+        cachedSws = sws_getContext(
+            frame->width, frame->height, static_cast<AVPixelFormat>(frame->format),
+            targetW, targetH, AV_PIX_FMT_RGB24,
+            SWS_FAST_BILINEAR, nullptr, nullptr, nullptr
+        );
+        cachedW = frame->width;
+        cachedH = frame->height;
+    }
+
+    if (!cachedSws) return {};
+
+    QImage img(targetW, targetH, QImage::Format_RGB888);
+    uint8_t *dstData[1] = { img.bits() };
+    int dstLinesize[1] = { static_cast<int>(img.bytesPerLine()) };
+
+    sws_scale(cachedSws, frame->data, frame->linesize, 0, frame->height, dstData, dstLinesize);
+    return img;
+}
 
 class TranscodeEnginePrivate {
 public:
@@ -132,14 +214,42 @@ public:
                     return;
                 }
 
-                // 选择编码器
+                // 选择编码器 (支持 NVENC / QSV 硬件加速及自动回退)
                 const AVCodec *outVideoEncoder = nullptr;
-                if (cfg.videoCodec == VideoCodecType::H264) {
-                    outVideoEncoder = avcodec_find_encoder_by_name("libx264");
-                    if (!outVideoEncoder) outVideoEncoder = avcodec_find_encoder(AV_CODEC_ID_H264);
-                } else if (cfg.videoCodec == VideoCodecType::H265) {
-                    outVideoEncoder = avcodec_find_encoder_by_name("libx265");
-                    if (!outVideoEncoder) outVideoEncoder = avcodec_find_encoder(AV_CODEC_ID_HEVC);
+                QString usedEncoderName;
+
+                if (cfg.hwAccel == HwAccelMode::Auto || cfg.hwAccel == HwAccelMode::NVENC) {
+                    if (cfg.videoCodec == VideoCodecType::H264) {
+                        outVideoEncoder = avcodec_find_encoder_by_name("h264_nvenc");
+                    } else if (cfg.videoCodec == VideoCodecType::H265) {
+                        outVideoEncoder = avcodec_find_encoder_by_name("hevc_nvenc");
+                    }
+                    if (outVideoEncoder) {
+                        usedEncoderName = (cfg.videoCodec == VideoCodecType::H264) ? "h264_nvenc" : "hevc_nvenc";
+                    }
+                }
+
+                if (!outVideoEncoder && (cfg.hwAccel == HwAccelMode::Auto || cfg.hwAccel == HwAccelMode::QSV)) {
+                    if (cfg.videoCodec == VideoCodecType::H264) {
+                        outVideoEncoder = avcodec_find_encoder_by_name("h264_qsv");
+                    } else if (cfg.videoCodec == VideoCodecType::H265) {
+                        outVideoEncoder = avcodec_find_encoder_by_name("hevc_qsv");
+                    }
+                    if (outVideoEncoder) {
+                        usedEncoderName = (cfg.videoCodec == VideoCodecType::H264) ? "h264_qsv" : "hevc_qsv";
+                    }
+                }
+
+                if (!outVideoEncoder) {
+                    if (cfg.videoCodec == VideoCodecType::H264) {
+                        outVideoEncoder = avcodec_find_encoder_by_name("libx264");
+                        if (!outVideoEncoder) outVideoEncoder = avcodec_find_encoder(AV_CODEC_ID_H264);
+                        usedEncoderName = "libx264";
+                    } else if (cfg.videoCodec == VideoCodecType::H265) {
+                        outVideoEncoder = avcodec_find_encoder_by_name("libx265");
+                        if (!outVideoEncoder) outVideoEncoder = avcodec_find_encoder(AV_CODEC_ID_HEVC);
+                        usedEncoderName = "libx265";
+                    }
                 }
 
                 if (!outVideoEncoder) {
@@ -194,6 +304,33 @@ public:
                 }
 
                 ret = avcodec_open2(outVideoCodecCtx.get(), outVideoEncoder, nullptr);
+                if (ret < 0 && (usedEncoderName.contains("nvenc") || usedEncoderName.contains("qsv"))) {
+                    // 硬件编码器不可用时，无缝回退至 CPU 软件编码器
+                    const AVCodec *fallbackEncoder = (cfg.videoCodec == VideoCodecType::H264)
+                        ? (avcodec_find_encoder_by_name("libx264") ? avcodec_find_encoder_by_name("libx264") : avcodec_find_encoder(AV_CODEC_ID_H264))
+                        : (avcodec_find_encoder_by_name("libx265") ? avcodec_find_encoder_by_name("libx265") : avcodec_find_encoder(AV_CODEC_ID_HEVC));
+                    if (fallbackEncoder) {
+                        outVideoCodecCtx.reset(avcodec_alloc_context3(fallbackEncoder));
+                        outVideoCodecCtx->width = outW;
+                        outVideoCodecCtx->height = outH;
+                        outVideoCodecCtx->pix_fmt = AV_PIX_FMT_YUV420P;
+                        outVideoCodecCtx->time_base = av_inv_q(targetFps);
+                        outVideoCodecCtx->framerate = targetFps;
+                        outVideoCodecCtx->gop_size = 12;
+                        outVideoCodecCtx->max_b_frames = 2;
+                        if (cfg.qualityMode == QualityMode::CRF) {
+                            av_opt_set(outVideoCodecCtx->priv_data, "crf", std::to_string(cfg.crf).c_str(), 0);
+                        } else {
+                            outVideoCodecCtx->bit_rate = cfg.videoBitrate;
+                        }
+                        av_opt_set(outVideoCodecCtx->priv_data, "preset", cfg.preset.toUtf8().constData(), 0);
+                        outVideoCodecCtx->thread_count = (cfg.threads > 0) ? cfg.threads : 0;
+                        if (outFmtCtx->oformat->flags & AVFMT_GLOBALHEADER) {
+                            outVideoCodecCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+                        }
+                        ret = avcodec_open2(outVideoCodecCtx.get(), fallbackEncoder, nullptr);
+                    }
+                }
                 if (ret < 0) {
                     updateState(TaskState::Failed);
                     emit q_ptr->finished(false, QString("打开输出视频编码器失败: %1").arg(ffmpegErrorToString(ret)));
@@ -329,6 +466,14 @@ public:
 
         int64_t encodedVideoFrames = 0;
         int64_t lastReportMs = 0;
+        int64_t lastVideoPts = -1;
+        int64_t fallbackVideoPts = 0;
+
+        qint64 lastPreviewEmitMs = 0;
+        SwsContext *previewSwsOrigin = nullptr;
+        SwsContext *previewSwsProcessed = nullptr;
+        int originCacheW = 0, originCacheH = 0;
+        int procCacheW = 0, procCacheH = 0;
 
         // 5. 核心转码处理循环
         while (isRunning && !isCanceled) {
@@ -368,7 +513,38 @@ public:
                             sws_scale(swsCtx.get(), decodedFrame->data, decodedFrame->linesize, 0,
                                       inVideoCodecCtx->height, scaledVideoFrame->data, scaledVideoFrame->linesize);
 
-                            scaledVideoFrame->pts = nextVideoPts++;
+                            // 内存级图像算法：动态实时去水印与区域平滑
+                            if (cfg.delogo.enabled) {
+                                applyDelogoYuv(scaledVideoFrame.get(), cfg.delogo);
+                            }
+
+                            // 动态精准时间戳计算 (弃用伪造的自增计数，按真实时间戳重映射对齐)
+                            int64_t inPts = decodedFrame->best_effort_timestamp;
+                            if (inPts == AV_NOPTS_VALUE) inPts = decodedFrame->pts;
+                            if (inPts == AV_NOPTS_VALUE) inPts = fallbackVideoPts;
+                            fallbackVideoPts = inPts + 1;
+
+                            int64_t targetPts = av_rescale_q_rnd(
+                                inPts,
+                                inFmtCtx->streams[inVideoIdx]->time_base,
+                                outVideoCodecCtx->time_base,
+                                static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX)
+                            );
+                            if (targetPts <= lastVideoPts) {
+                                targetPts = lastVideoPts + 1;
+                            }
+                            lastVideoPts = targetPts;
+                            scaledVideoFrame->pts = targetPts;
+
+                            // 实时双分屏预览抽样抛送 (节流约 25 FPS，避免跨线程信号风暴)
+                            qint64 nowMs = timer.elapsed();
+                            if (nowMs - lastPreviewEmitMs >= 40) {
+                                lastPreviewEmitMs = nowMs;
+                                QImage origImg = avFrameToPreviewImage(decodedFrame.get(), previewSwsOrigin, originCacheW, originCacheH, 480, 270);
+                                QImage procImg = avFrameToPreviewImage(scaledVideoFrame.get(), previewSwsProcessed, procCacheW, procCacheH, 480, 270);
+                                double currentPtsSec = static_cast<double>(targetPts) * av_q2d(outVideoCodecCtx->time_base);
+                                emit q_ptr->frameRendered(origImg, procImg, currentPtsSec);
+                            }
 
                             // 编码视频
                             if (avcodec_send_frame(outVideoCodecCtx.get(), scaledVideoFrame.get()) >= 0) {
@@ -500,18 +676,49 @@ public:
             }
 
             if (transcodeAudio && outAudioCodecCtx) {
-                // 将 FIFO 中剩余样本全部编码
-                int remainingSamples = av_audio_fifo_size(audioFifo.get());
-                if (remainingSamples > 0) {
+                // 1. 循环排空 swrCtx 内部残留的重采样滤波延迟
+                int delay = swr_get_delay(swrCtx.get(), outAudioCodecCtx->sample_rate);
+                while (delay > 0) {
+                    uint8_t **flushedData = nullptr;
+                    int linesize = 0;
+                    int allocSamples = delay + 256;
+                    av_samples_alloc_array_and_samples(&flushedData, &linesize, outAudioCodecCtx->channels,
+                                                       allocSamples, outAudioCodecCtx->sample_fmt, 0);
+                    int outSamples = swr_convert(swrCtx.get(), flushedData, allocSamples, nullptr, 0);
+                    if (outSamples > 0) {
+                        av_audio_fifo_write(audioFifo.get(), reinterpret_cast<void**>(flushedData), outSamples);
+                    }
+                    if (flushedData) {
+                        av_freep(&flushedData[0]);
+                        av_freep(&flushedData);
+                    }
+                    delay = swr_get_delay(swrCtx.get(), outAudioCodecCtx->sample_rate);
+                    if (outSamples <= 0) break;
+                }
+
+                // 2. 将 FIFO 中剩余样本全部编码，并在片尾执行静音填充 (Pad Silence) 对齐 1024 样本
+                int frameSize = outAudioCodecCtx->frame_size > 0 ? outAudioCodecCtx->frame_size : 1024;
+                while (av_audio_fifo_size(audioFifo.get()) > 0) {
+                    int remainingSamples = av_audio_fifo_size(audioFifo.get());
+                    int take = std::min(remainingSamples, frameSize);
+
                     UniqueAvFrame encAudioFrame(av_frame_alloc());
-                    encAudioFrame->nb_samples = remainingSamples;
+                    encAudioFrame->nb_samples = frameSize;
                     encAudioFrame->channel_layout = outAudioCodecCtx->channel_layout;
                     encAudioFrame->format = outAudioCodecCtx->sample_fmt;
                     encAudioFrame->sample_rate = outAudioCodecCtx->sample_rate;
                     av_frame_get_buffer(encAudioFrame.get(), 0);
 
-                    av_audio_fifo_read(audioFifo.get(), reinterpret_cast<void**>(encAudioFrame->data), remainingSamples);
+                    // 预先全部静音填充（对齐 AAC 要求）
+                    for (int ch = 0; ch < outAudioCodecCtx->channels; ++ch) {
+                        if (encAudioFrame->extended_data[ch]) {
+                            std::memset(encAudioFrame->extended_data[ch], 0, frameSize * av_get_bytes_per_sample(outAudioCodecCtx->sample_fmt));
+                        }
+                    }
+
+                    av_audio_fifo_read(audioFifo.get(), reinterpret_cast<void**>(encAudioFrame->data), take);
                     encAudioFrame->pts = nextAudioPts;
+                    nextAudioPts += frameSize;
 
                     if (avcodec_send_frame(outAudioCodecCtx.get(), encAudioFrame.get()) >= 0) {
                         while (avcodec_receive_packet(outAudioCodecCtx.get(), outPacket.get()) == 0) {
@@ -523,6 +730,7 @@ public:
                     }
                 }
 
+                // 3. 刷洗编码器残留包
                 avcodec_send_frame(outAudioCodecCtx.get(), nullptr);
                 while (avcodec_receive_packet(outAudioCodecCtx.get(), outPacket.get()) == 0) {
                     av_packet_rescale_ts(outPacket.get(), outAudioCodecCtx->time_base, outAudioStream->time_base);
@@ -534,6 +742,9 @@ public:
 
             av_write_trailer(outFmtCtx.get());
         }
+
+        if (previewSwsOrigin) sws_freeContext(previewSwsOrigin);
+        if (previewSwsProcessed) sws_freeContext(previewSwsProcessed);
 
         // 7. 完成状态判定
         if (isCanceled) {

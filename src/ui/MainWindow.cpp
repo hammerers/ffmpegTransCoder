@@ -5,6 +5,7 @@
 #include "FilePrepPage.h"
 #include "ParamConsolePage.h"
 #include "MediaInspectorPage.h"
+#include "LiveMonitorPage.h"
 #include "manager/TranscodeTaskManager.h"
 
 #include <QHBoxLayout>
@@ -39,6 +40,7 @@ public:
     FilePrepPage *filePrepPage{nullptr};
     ParamConsolePage *paramPage{nullptr};
     MediaInspectorPage *mediaInspectorPage{nullptr};
+    LiveMonitorPage *liveMonitorPage{nullptr};
 
     QLabel *perfInfoLabel{nullptr};
     QLabel *topStatusBadge{nullptr};
@@ -100,12 +102,14 @@ public:
         paramPage = new ParamConsolePage(pageStack);
         mediaInspectorPage = new MediaInspectorPage(pageStack);
         mediaInspectorPage->setManager(&manager);
+        liveMonitorPage = new LiveMonitorPage(pageStack);
 
         pageStack->addWidget(homePage);            // 0: 起始页面
         pageStack->addWidget(queuePage);           // 1: 编码队列
         pageStack->addWidget(filePrepPage);        // 2: 准备文件
         pageStack->addWidget(paramPage);           // 3: 参数面板
         pageStack->addWidget(mediaInspectorPage);  // 4: 媒体信息
+        pageStack->addWidget(liveMonitorPage);     // 5: 实时检视
 
         bodyLayout->addWidget(navSidebar);
         bodyLayout->addWidget(pageStack, 1);
@@ -121,6 +125,25 @@ public:
         // 侧边栏切换页面联动
         QObject::connect(navSidebar, &NavSidebar::currentChanged, [this](int index) {
             pageStack->setCurrentIndex(index);
+        });
+
+        // 实时双分屏画面渲染联动
+        QObject::connect(&manager, &TranscodeTaskManager::taskFrameRendered,
+                         [this](TranscodeTask *task, const QImage &origin, const QImage &processed, double pts) {
+            QString name = task ? task->mediaInfo().fileName : "视频流";
+            liveMonitorPage->updateLiveFrame(name, origin, processed, pts);
+        });
+
+        // 任务结束或队列空闲重置视口
+        QObject::connect(&manager, &TranscodeTaskManager::allTasksCompleted, [this]() {
+            liveMonitorPage->resetToIdle();
+        });
+
+        // 实时去水印参数双向同步
+        QObject::connect(liveMonitorPage, &LiveMonitorPage::delogoConfigChanged, [this](const DelogoConfig &cfg) {
+            TranscodeConfig c = paramPage->config();
+            c.delogo = cfg;
+            paramPage->setConfig(c);
         });
 
         // 起始页快捷跳转

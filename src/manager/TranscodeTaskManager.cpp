@@ -120,6 +120,10 @@ public:
             task->setProgress(p);
         });
 
+        QObject::connect(engine.get(), &TranscodeEngine::frameRendered, q_ptr, [this, task](const QImage &orig, const QImage &proc, double pts) {
+            emit q_ptr->taskFrameRendered(task, orig, proc, pts);
+        });
+
         QObject::connect(engine.get(), &TranscodeEngine::finished, q_ptr, [this, task, taskId](bool success, const QString &message) {
             if (!success) {
                 task->setErrorMessage(message);
