@@ -29,7 +29,6 @@ public:
 
     QLabel *titleLabel{nullptr};
     QLabel *taskNameLabel{nullptr};
-    QLabel *hwBadgeLabel{nullptr};
 
     QPushButton *startBtn{nullptr};
     QPushButton *pauseBtn{nullptr};
@@ -39,7 +38,6 @@ public:
     // 底部工具与检视任务选择
     QComboBox *taskCombo{nullptr};
     QPushButton *tabWatermarkBtn{nullptr};
-    QPushButton *tabDelogoBtn{nullptr};
     QStackedWidget *toolStack{nullptr};
 
     // 自定义水印控件
@@ -88,10 +86,6 @@ public:
 
         headerLayout->addStretch();
 
-        hwBadgeLabel = new QLabel("硬件加速: 自动探测就绪", q_ptr);
-        hwBadgeLabel->setObjectName("liveHwBadge");
-        headerLayout->addWidget(hwBadgeLabel);
-
         // 转码控制按钮组
         startBtn = new QPushButton("开始转码检视", q_ptr);
         startBtn->setObjectName("btnLiveStart");
@@ -116,7 +110,7 @@ public:
         bottomLayout->setContentsMargins(14, 10, 14, 10);
         bottomLayout->setSpacing(8);
 
-        // 第 1 行：视频选择 + 算法选项卡切换 + 提示
+        // 第 1 行：视频选择 + 当前配置分区标识
         auto *selectorRow = new QHBoxLayout();
         selectorRow->setSpacing(10);
 
@@ -130,27 +124,13 @@ public:
         taskCombo->setMaximumWidth(240);
         selectorRow->addWidget(taskCombo);
 
-        auto *tabGroup = new QButtonGroup(bottomCard);
-        tabGroup->setExclusive(true);
-
         tabWatermarkBtn = new QPushButton("自定义水印叠加", bottomCard);
         tabWatermarkBtn->setObjectName("liveTabWatermark");
         tabWatermarkBtn->setCheckable(true);
         tabWatermarkBtn->setChecked(true);
-        tabGroup->addButton(tabWatermarkBtn, 0);
-
-        tabDelogoBtn = new QPushButton("内存去水印算法", bottomCard);
-        tabDelogoBtn->setObjectName("liveTabDelogo");
-        tabDelogoBtn->setCheckable(true);
-        tabGroup->addButton(tabDelogoBtn, 1);
-
         selectorRow->addWidget(tabWatermarkBtn);
-        selectorRow->addWidget(tabDelogoBtn);
-        selectorRow->addStretch();
 
-        auto *hintLabel = new QLabel("提示: 调参即时所见 | 右侧画面支持鼠标直接拖拽水印", bottomCard);
-        hintLabel->setObjectName("liveHintLabel");
-        selectorRow->addWidget(hintLabel);
+        selectorRow->addStretch();
 
         bottomLayout->addLayout(selectorRow);
 
@@ -376,9 +356,6 @@ public:
         QObject::connect(tabWatermarkBtn, &QPushButton::clicked, [this]() {
             toolStack->setCurrentIndex(0);
         });
-        QObject::connect(tabDelogoBtn, &QPushButton::clicked, [this]() {
-            toolStack->setCurrentIndex(1);
-        });
 
         // 水印类型切换 (文字 / 图片)
         QObject::connect(wmTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [this](int idx) {
@@ -435,7 +412,7 @@ public:
 
             viewport->setWatermarkConfig(cfg);
 
-            if (manager) {
+            if (manager && !currentTaskId.isEmpty()) {
                 auto *task = manager->getTask(currentTaskId);
                 if (task) {
                     TranscodeConfig c = task->config();
@@ -467,7 +444,7 @@ public:
             cfg.height = spinH->value();
             viewport->setDelogoHighlight(cfg.enabled, QRect(cfg.x, cfg.y, cfg.width, cfg.height));
 
-            if (manager) {
+            if (manager && !currentTaskId.isEmpty()) {
                 auto *task = manager->getTask(currentTaskId);
                 if (task) {
                     TranscodeConfig c = task->config();
@@ -484,43 +461,13 @@ public:
         QObject::connect(spinW, QOverload<int>::of(&QSpinBox::valueChanged), emitDelogo);
         QObject::connect(spinH, QOverload<int>::of(&QSpinBox::valueChanged), emitDelogo);
 
-        // 切换检视任务联动
+        // 切换检视任务联动 (触发 selectTask 并向上通知 taskSelected)
         QObject::connect(taskCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [this](int idx) {
             if (idx < 0) return;
-            currentTaskId = taskCombo->currentData().toString();
-            if (manager) {
-                auto *task = manager->getTask(currentTaskId);
-                if (task) {
-                    TranscodeConfig c = task->config();
-                    // 同步去水印
-                    delogoCheck->setChecked(c.delogo.enabled);
-                    spinX->setValue(c.delogo.x);
-                    spinY->setValue(c.delogo.y);
-                    spinW->setValue(c.delogo.width);
-                    spinH->setValue(c.delogo.height);
-
-                    // 同步水印
-                    watermarkCheck->setChecked(c.watermark.enabled);
-                    int tIdx = wmTypeCombo->findData(static_cast<int>(c.watermark.type));
-                    if (tIdx >= 0) wmTypeCombo->setCurrentIndex(tIdx);
-                    if (!c.watermark.text.isEmpty()) wmTextEdit->setText(c.watermark.text);
-                    wmImagePathEdit->setText(c.watermark.imagePath);
-                    if (c.watermark.fontSize > 0) wmFontSizeSpin->setValue(c.watermark.fontSize);
-                    int pIdx = wmPosCombo->findData(static_cast<int>(c.watermark.position));
-                    if (pIdx >= 0) wmPosCombo->setCurrentIndex(pIdx);
-                    wmSpinX->setValue(c.watermark.x);
-                    wmSpinY->setValue(c.watermark.y);
-                    if (c.watermark.opacity > 0.0f) wmOpacitySpin->setValue(c.watermark.opacity);
-                    if (c.watermark.scale > 0.0f) wmScaleSpin->setValue(c.watermark.scale);
-
-                    viewport->setWatermarkConfig(c.watermark);
-                    viewport->setDelogoHighlight(c.delogo.enabled, QRect(c.delogo.x, c.delogo.y, c.delogo.width, c.delogo.height));
-
-                    QImage thumb = task->thumbnail();
-                    if (!thumb.isNull()) {
-                        viewport->setStaticPreview(thumb, QFileInfo(task->inputFilePath()).fileName());
-                    }
-                }
+            QString taskId = taskCombo->currentData().toString();
+            if (!taskId.isEmpty()) {
+                q_ptr->selectTask(taskId);
+                emit q_ptr->taskSelected(taskId);
             }
         });
     }
@@ -573,8 +520,11 @@ void LiveMonitorPage::setManager(TranscodeTaskManager *manager) {
     if (!manager) return;
 
     auto refreshTaskCombo = [this, d]() {
+        QString prevId = d->currentTaskId;
         d->taskCombo->blockSignals(true);
         d->taskCombo->clear();
+        int restoreIdx = -1;
+        int i = 0;
         for (auto *t : d->manager->allTasks()) {
             QString name = QFileInfo(t->inputFilePath()).fileName();
             QString stateStr;
@@ -583,9 +533,24 @@ void LiveMonitorPage::setManager(TranscodeTaskManager *manager) {
             else if (t->state() == TaskState::Paused) stateStr = "已暂停";
             else stateStr = "待命中";
             d->taskCombo->addItem(QString("%1 (%2)").arg(name).arg(stateStr), t->id());
+            if (t->id() == prevId) {
+                restoreIdx = i;
+            }
+            i++;
+        }
+        if (restoreIdx >= 0) {
+            d->taskCombo->setCurrentIndex(restoreIdx);
+        } else if (d->taskCombo->count() > 0) {
+            d->taskCombo->setCurrentIndex(0);
         }
         d->taskCombo->blockSignals(false);
-        checkAndLoadPreview();
+
+        QString currentSel = d->taskCombo->currentData().toString();
+        if (!currentSel.isEmpty()) {
+            selectTask(currentSel);
+        } else {
+            checkAndLoadPreview();
+        }
     };
 
     QObject::connect(manager, &TranscodeTaskManager::taskAdded, this, refreshTaskCombo);
@@ -595,6 +560,49 @@ void LiveMonitorPage::setManager(TranscodeTaskManager *manager) {
     });
 
     refreshTaskCombo();
+}
+
+void LiveMonitorPage::selectTask(const QString &taskId) {
+    Q_D(LiveMonitorPage);
+    if (taskId.isEmpty() || !d->manager) return;
+    d->currentTaskId = taskId;
+
+    // 同步 taskCombo 下拉框当前索引
+    int idx = d->taskCombo->findData(taskId);
+    if (idx >= 0 && d->taskCombo->currentIndex() != idx) {
+        d->taskCombo->blockSignals(true);
+        d->taskCombo->setCurrentIndex(idx);
+        d->taskCombo->blockSignals(false);
+    }
+
+    auto *task = d->manager->getTask(taskId);
+    if (!task) return;
+
+    QString fileName = QFileInfo(task->inputFilePath()).fileName();
+    d->taskNameLabel->setText(QString("当前状态: 待命调参 (已加载: %1)").arg(fileName));
+
+    // 回显该任务专属的水印与去水印配置 (内部带完整的 blockSignals，绝不会反向产生误覆盖)
+    setWatermarkConfig(task->config().watermark);
+    setDelogoConfig(task->config().delogo);
+
+    // 视口更新专属水印与去水印效果
+    d->viewport->setWatermarkConfig(task->config().watermark);
+    d->viewport->setDelogoHighlight(task->config().delogo.enabled,
+        QRect(task->config().delogo.x, task->config().delogo.y, task->config().delogo.width, task->config().delogo.height));
+
+    QImage thumb = task->thumbnail();
+    if (!thumb.isNull()) {
+        d->viewport->setStaticPreview(thumb, fileName);
+    } else {
+        d->viewport->resetToIdle();
+        QObject::connect(task, &TranscodeTask::thumbnailLoaded, this, [d, task](const QImage &img) {
+            if (d->currentTaskId == task->id() && !d->viewport->hasFrames()) {
+                d->viewport->setStaticPreview(img, QFileInfo(task->inputFilePath()).fileName());
+            }
+        });
+    }
+
+    d->updateRunningState();
 }
 
 void LiveMonitorPage::checkAndLoadPreview() {
@@ -608,36 +616,21 @@ void LiveMonitorPage::checkAndLoadPreview() {
         }
     }
 
-    QString targetId = d->taskCombo->currentData().toString();
-    TranscodeTask *task = d->manager->getTask(targetId);
-    if (!task && !d->manager->allTasks().isEmpty()) {
-        task = d->manager->allTasks().first();
+    QString targetId = d->currentTaskId;
+    if (targetId.isEmpty() || !d->manager->getTask(targetId)) {
+        targetId = d->taskCombo->currentData().toString();
+    }
+    if ((targetId.isEmpty() || !d->manager->getTask(targetId)) && !d->manager->allTasks().isEmpty()) {
+        targetId = d->manager->allTasks().first()->id();
     }
 
-    if (task) {
-        d->currentTaskId = task->id();
-        QString fileName = QFileInfo(task->inputFilePath()).fileName();
-        d->taskNameLabel->setText(QString("当前状态: 待命调参 (已加载: %1 - 可在下方调参预览水印与去水印效果)").arg(fileName));
-
-        TranscodeConfig c = task->config();
-        d->viewport->setWatermarkConfig(c.watermark);
-        d->viewport->setDelogoHighlight(c.delogo.enabled, QRect(c.delogo.x, c.delogo.y, c.delogo.width, c.delogo.height));
-
-        QImage thumb = task->thumbnail();
-        if (!thumb.isNull()) {
-            d->viewport->setStaticPreview(thumb, fileName);
-        } else {
-            QObject::connect(task, &TranscodeTask::thumbnailLoaded, this, [d, task](const QImage &img) {
-                if (d->currentTaskId == task->id() && !d->viewport->hasFrames()) {
-                    d->viewport->setStaticPreview(img, QFileInfo(task->inputFilePath()).fileName());
-                }
-            });
-        }
+    if (!targetId.isEmpty() && d->manager->getTask(targetId)) {
+        selectTask(targetId);
     } else {
         d->taskNameLabel->setText("当前状态: 暂无活跃转码流");
         d->viewport->resetToIdle();
+        d->updateRunningState();
     }
-    d->updateRunningState();
 }
 
 DelogoConfig LiveMonitorPage::delogoConfig() const {
@@ -675,9 +668,8 @@ void LiveMonitorPage::updateLiveFrame(const QString &taskName, const QImage &ori
     d->updateRunningState();
 }
 
-void LiveMonitorPage::setHwAccelStatus(const QString &statusText) {
-    Q_D(LiveMonitorPage);
-    d->hwBadgeLabel->setText(statusText);
+void LiveMonitorPage::setHwAccelStatus(const QString &) {
+    // 硬件加速徽标已按设计移除，保留接口契约
 }
 
 void LiveMonitorPage::resetToIdle() {
@@ -696,11 +688,24 @@ void LiveMonitorPage::showCompletedState() {
 
 void LiveMonitorPage::setDelogoConfig(const DelogoConfig &cfg) {
     Q_D(LiveMonitorPage);
+    d->delogoCheck->blockSignals(true);
+    d->spinX->blockSignals(true);
+    d->spinY->blockSignals(true);
+    d->spinW->blockSignals(true);
+    d->spinH->blockSignals(true);
+
     d->delogoCheck->setChecked(cfg.enabled);
     d->spinX->setValue(cfg.x);
     d->spinY->setValue(cfg.y);
     d->spinW->setValue(cfg.width);
     d->spinH->setValue(cfg.height);
+
+    d->delogoCheck->blockSignals(false);
+    d->spinX->blockSignals(false);
+    d->spinY->blockSignals(false);
+    d->spinW->blockSignals(false);
+    d->spinH->blockSignals(false);
+
     d->viewport->setDelogoHighlight(cfg.enabled, QRect(cfg.x, cfg.y, cfg.width, cfg.height));
 }
 

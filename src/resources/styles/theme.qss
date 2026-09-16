@@ -573,16 +573,6 @@ QSplitter::handle:hover {
     font-size: 12px;
 }
 
-#topStatusBadge {
-    background-color: #163828;
-    color: #4ade80;
-    border: 1px solid #22c55e;
-    font-size: 11px;
-    font-weight: bold;
-    border-radius: 4px;
-    padding: 2px 8px;
-}
-
 /* 纵向导航侧边栏 */
 #navSidebar {
     background-color: #17181c;
@@ -968,16 +958,6 @@ QSplitter::handle:hover {
     color: #94a3b8;
 }
 
-#liveHwBadge {
-    background-color: #0f291e;
-    color: #34d399;
-    border: 1px solid #059669;
-    border-radius: 12px;
-    padding: 4px 12px;
-    font-size: 11px;
-    font-weight: 600;
-}
-
 #btnCompareModeSide, #btnCompareModeCurtain, #btnCompareModeProcessed {
     background-color: #222632;
     color: #94a3b8;
@@ -1034,11 +1014,6 @@ QSplitter::handle:hover {
 
 #liveSpinBox:focus {
     border-color: #38bdf8;
-}
-
-#liveHintLabel {
-    color: #64748b;
-    font-size: 11px;
 }
 
 #btnLiveStart {
@@ -1105,25 +1080,19 @@ QSplitter::handle:hover {
     selection-color: #ffffff;
 }
 
-#liveTabWatermark, #liveTabDelogo {
-    background-color: #222632;
-    color: #94a3b8;
-    border: 1px solid #333a4c;
+#liveTabWatermark {
+    background-color: #0369a1;
+    color: #ffffff;
+    border: 1px solid #38bdf8;
     border-radius: 6px;
     padding: 5px 12px;
     font-size: 12px;
     font-weight: 600;
 }
 
-#liveTabWatermark:hover, #liveTabDelogo:hover {
-    background-color: #2a3040;
-    border-color: #475569;
-    color: #ffffff;
-}
-
-#liveTabWatermark:checked, #liveTabDelogo:checked {
-    background-color: #0369a1;
-    border: 1px solid #38bdf8;
+#liveTabWatermark:hover {
+    background-color: #0284c7;
+    border-color: #7dd3fc;
     color: #ffffff;
 }
 

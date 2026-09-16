@@ -600,29 +600,6 @@ void VideoCompareWidget::paintEvent(QPaintEvent *) {
         }
         d->drawBadge(p, QRect(10, 10, 120, 22), rightBadgeText, QColor(15, 23, 42, 200), QColor("#34d399"));
     }
-
-    // 底部浮动状态与信息条
-    QString timeText;
-    if (d->isCompleted) {
-        timeText = QString("转码已完成 | 共压制 %1 帧 | 终版画质对比").arg(d->frameCount);
-    } else if (d->isStaticPreview) {
-        timeText = QString("待命调参预览 | 右侧画面支持直接鼠标拖拽水印位置");
-    } else {
-        timeText = QString("PTS %1 | 渲染帧 %2 | 左右并排实时检视").arg(d->formatPts(d->currentPts)).arg(d->frameCount);
-    }
-
-    QFont f = p.font();
-    f.setPixelSize(11);
-    p.setFont(f);
-    QFontMetrics fm(f);
-    int pillW = fm.horizontalAdvance(timeText) + 24;
-    QRect pillRect(12, h - 34, pillW, 24);
-    p.setBrush(QColor(15, 23, 42, 220));
-    p.setPen(QPen(d->isCompleted ? QColor("#059669") : (d->isStaticPreview ? QColor("#0284c7") : QColor("#334155")), 1));
-    p.drawRoundedRect(pillRect, 4, 4);
-
-    p.setPen(d->isCompleted ? QColor("#34d399") : (d->isStaticPreview ? QColor("#38bdf8") : QColor("#94a3b8")));
-    p.drawText(pillRect, Qt::AlignCenter, timeText);
 }
 
 void VideoCompareWidget::mousePressEvent(QMouseEvent *event) {

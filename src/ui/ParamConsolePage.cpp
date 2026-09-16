@@ -573,6 +573,20 @@ void ParamConsolePage::setConfig(const TranscodeConfig &cfg) {
     Q_D(ParamConsolePage);
     d->cachedConfig = cfg;
 
+    // 严密阻断信号，杜绝向外级联发射虚假的 configChanged 覆盖任务参数
+    const bool b0 = d->encoderTypeCombo->blockSignals(true);
+    const bool b1 = d->formatCombo->blockSignals(true);
+    const bool b2 = d->encoderCategoryCombo->blockSignals(true);
+    const bool b3 = d->resCombo->blockSignals(true);
+    const bool b4 = d->fpsCombo->blockSignals(true);
+    const bool b5 = d->crfSlider->blockSignals(true);
+    const bool b6 = d->presetCombo->blockSignals(true);
+    const bool b7 = d->profileCombo->blockSignals(true);
+    const bool b8 = d->tuneCombo->blockSignals(true);
+    const bool b9 = d->audioCodecCombo->blockSignals(true);
+    const bool b10 = d->audioBitrateCombo->blockSignals(true);
+    const bool b11 = d->sampleRateCombo->blockSignals(true);
+
     if (cfg.hwAccel == HwAccelMode::NVENC) d->encoderTypeCombo->setCurrentIndex(1);
     else if (cfg.hwAccel == HwAccelMode::QSV) d->encoderTypeCombo->setCurrentIndex(2);
     else d->encoderTypeCombo->setCurrentIndex(0);
@@ -602,6 +616,31 @@ void ParamConsolePage::setConfig(const TranscodeConfig &cfg) {
     int arIdx = d->sampleRateCombo->findData(cfg.audioSampleRate);
     if (arIdx >= 0) d->sampleRateCombo->setCurrentIndex(arIdx);
 
+    d->encoderTypeCombo->blockSignals(b0);
+    d->formatCombo->blockSignals(b1);
+    d->encoderCategoryCombo->blockSignals(b2);
+    d->resCombo->blockSignals(b3);
+    d->fpsCombo->blockSignals(b4);
+    d->crfSlider->blockSignals(b5);
+    d->presetCombo->blockSignals(b6);
+    d->profileCombo->blockSignals(b7);
+    d->tuneCombo->blockSignals(b8);
+    d->audioCodecCombo->blockSignals(b9);
+    d->audioBitrateCombo->blockSignals(b10);
+    d->sampleRateCombo->blockSignals(b11);
+
+    d->updatePreview();
+}
+
+void ParamConsolePage::setWatermarkForPreview(const WatermarkConfig &wm) {
+    Q_D(ParamConsolePage);
+    d->cachedConfig.watermark = wm;
+    d->updatePreview();
+}
+
+void ParamConsolePage::setDelogoForPreview(const DelogoConfig &delogo) {
+    Q_D(ParamConsolePage);
+    d->cachedConfig.delogo = delogo;
     d->updatePreview();
 }
 

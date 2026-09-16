@@ -25,6 +25,7 @@ public:
     void checkAndLoadPreview();
 
 public slots:
+    void selectTask(const QString &taskId);
     void updateLiveFrame(const QString &taskName, const QImage &origin, const QImage &processed, double ptsSec);
     void setHwAccelStatus(const QString &statusText);
     void resetToIdle();
@@ -33,6 +34,7 @@ public slots:
     void setWatermarkConfig(const WatermarkConfig &cfg);
 
 signals:
+    void taskSelected(const QString &taskId);
     void delogoConfigChanged(const DelogoConfig &cfg);
     void watermarkConfigChanged(const WatermarkConfig &cfg);
 

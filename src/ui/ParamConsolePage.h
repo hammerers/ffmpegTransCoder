@@ -21,6 +21,8 @@ public:
 
     TranscodeConfig config() const;
     void setConfig(const TranscodeConfig &cfg);
+    void setWatermarkForPreview(const WatermarkConfig &wm);
+    void setDelogoForPreview(const DelogoConfig &delogo);
 
     QString generateEquivalentArgs() const;
 

@@ -43,7 +43,6 @@ public:
     LiveMonitorPage *liveMonitorPage{nullptr};
 
     QLabel *perfInfoLabel{nullptr};
-    QLabel *topStatusBadge{nullptr};
     QTimer *perfTimer{nullptr};
 
     QString currentSelectedTaskId;
@@ -74,13 +73,9 @@ public:
         perfInfoLabel = new QLabel("FFmpeg Transcoder Pro  |  CPU 0.4%  |  RAM 86M / 240M  |  GPU 0.0% 114M + 4M", topBar);
         perfInfoLabel->setObjectName("topPerfLabel");
 
-        topStatusBadge = new QLabel("转码引擎已就绪", topBar);
-        topStatusBadge->setObjectName("topStatusBadge");
-
         topLayout->addWidget(appIcon);
         topLayout->addWidget(perfInfoLabel);
         topLayout->addStretch();
-        topLayout->addWidget(topStatusBadge);
 
         rootLayout->addWidget(topBar);
 
@@ -143,18 +138,14 @@ public:
             liveMonitorPage->showCompletedState();
         });
 
-        // 实时去水印参数双向同步
+        // 实时去水印参数双向同步 (仅更新参数面板预览，不覆写任务)
         QObject::connect(liveMonitorPage, &LiveMonitorPage::delogoConfigChanged, [this](const DelogoConfig &cfg) {
-            TranscodeConfig c = paramPage->config();
-            c.delogo = cfg;
-            paramPage->setConfig(c);
+            if (paramPage) paramPage->setDelogoForPreview(cfg);
         });
 
-        // 实时自定义水印参数双向同步
+        // 实时自定义水印参数双向同步 (仅更新参数面板预览，不覆写任务)
         QObject::connect(liveMonitorPage, &LiveMonitorPage::watermarkConfigChanged, [this](const WatermarkConfig &cfg) {
-            TranscodeConfig c = paramPage->config();
-            c.watermark = cfg;
-            paramPage->setConfig(c);
+            if (paramPage) paramPage->setWatermarkForPreview(cfg);
         });
 
         // 起始页快捷跳转
@@ -194,37 +185,47 @@ public:
 
         QObject::connect(queuePage, &QueuePage::filesDropped, onAddFiles);
 
+        // 检视页面切换视频联动
+        QObject::connect(liveMonitorPage, &LiveMonitorPage::taskSelected, [this](const QString &id) {
+            currentSelectedTaskId = id;
+            mediaInspectorPage->selectTask(id);
+            auto *t = manager.getTask(id);
+            if (t && paramPage) {
+                paramPage->setConfig(t->config());
+            }
+        });
+
         // 任务选中联动 (队列页面选中)
         QObject::connect(queuePage, &QueuePage::taskSelected, [this](const QString &id) {
             currentSelectedTaskId = id;
             mediaInspectorPage->selectTask(id);
+            liveMonitorPage->selectTask(id);
             auto *t = manager.getTask(id);
-            if (t) {
+            if (t && paramPage) {
                 paramPage->setConfig(t->config());
-                liveMonitorPage->setDelogoConfig(t->config().delogo);
-                liveMonitorPage->setWatermarkConfig(t->config().watermark);
             }
         });
 
         // 媒体信息页选中联动
         QObject::connect(mediaInspectorPage, &MediaInspectorPage::taskSelected, [this](const QString &id) {
             currentSelectedTaskId = id;
+            liveMonitorPage->selectTask(id);
             auto *t = manager.getTask(id);
-            if (t) {
+            if (t && paramPage) {
                 paramPage->setConfig(t->config());
-                liveMonitorPage->setDelogoConfig(t->config().delogo);
-                liveMonitorPage->setWatermarkConfig(t->config().watermark);
             }
         });
 
         // 媒体信息页拖拽加入文件联动
         QObject::connect(mediaInspectorPage, &MediaInspectorPage::filesDropped, onAddFiles);
 
-        // 预设修改更新到当前选中的任务
+        // 预设修改更新到当前选中的任务 (严格保留原任务已有的独立水印和去水印配置)
         QObject::connect(paramPage, &ParamConsolePage::configChanged, [this](const TranscodeConfig &cfg) {
             auto *t = manager.getTask(currentSelectedTaskId);
             if (t) {
                 TranscodeConfig newCfg = cfg;
+                newCfg.watermark = t->config().watermark;
+                newCfg.delogo = t->config().delogo;
                 newCfg.inputPath = t->inputFilePath();
 
                 QFileInfo fi(t->inputFilePath());
@@ -234,11 +235,13 @@ public:
             }
         });
 
-        // 应用参数到队列所有视频统一联动
+        // 应用参数到队列所有视频统一联动 (保留各任务已独立设置的水印和去水印)
         auto applyConfigToAll = [this](const TranscodeConfig &cfg) {
             for (auto *t : manager.allTasks()) {
                 if (t->state() != TaskState::Converting && t->state() != TaskState::Completed) {
                     TranscodeConfig newCfg = cfg;
+                    newCfg.watermark = t->config().watermark;
+                    newCfg.delogo = t->config().delogo;
                     newCfg.inputPath = t->inputFilePath();
                     QFileInfo fi(t->inputFilePath());
                     QString ext = cfg.containerFormat;
