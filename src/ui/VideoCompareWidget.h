@@ -37,6 +37,8 @@ public:
 
     void setDelogoHighlight(bool enabled, const QRect &rect);
     void setWatermarkConfig(const WatermarkConfig &cfg);
+    void setNativeSourceSize(const QSize &size);
+    QSize nativeSourceSize() const;
     bool hasFrames() const;
 
 public slots:

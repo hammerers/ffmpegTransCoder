@@ -73,8 +73,21 @@ public:
 
     void connectTaskSignals(TranscodeTask *task) {
         if (!task) return;
-        QObject::connect(task, &TranscodeTask::mediaInfoLoaded, q_ptr, [this, task](const MediaInfo &) {
+        QObject::connect(task, &TranscodeTask::mediaInfoLoaded, q_ptr, [this, task](const MediaInfo &info) {
             updateTaskItem(task);
+            if (currentTaskId == task->id() && info.hasVideo()) {
+                if (const auto *v = info.primaryVideo()) {
+                    if (v->width > 0 && v->height > 0) {
+                        viewport->setNativeSourceSize(QSize(v->width, v->height));
+                        wmSpinX->setRange(0, std::max(3840, v->width));
+                        wmSpinY->setRange(0, std::max(2160, v->height));
+                        if (spinX) spinX->setRange(0, std::max(3840, v->width));
+                        if (spinY) spinY->setRange(0, std::max(2160, v->height));
+                        if (spinW) spinW->setRange(10, std::max(3840, v->width));
+                        if (spinH) spinH->setRange(10, std::max(2160, v->height));
+                    }
+                }
+            }
         });
         QObject::connect(task, &TranscodeTask::thumbnailLoaded, q_ptr, [this, task](const QImage &img) {
             if (currentTaskId == task->id() && !viewport->hasFrames() && (!player || !player->isOpened())) {
@@ -554,6 +567,9 @@ public:
         });
 
         QObject::connect(player, &PreviewPlayer::mediaOpened, q_ptr, [this](PlaybackMode mode, double durationSec) {
+            if (player->sourceVideoSize().isValid()) {
+                viewport->setNativeSourceSize(player->sourceVideoSize());
+            }
             if (mode == PlaybackMode::SingleSource) {
                 playBar->setPlaybackMode("single");
             } else if (mode == PlaybackMode::DualSource) {
@@ -808,6 +824,21 @@ void LiveMonitorPage::selectTask(const QString &taskId) {
     d->viewport->setDelogoHighlight(task->config().delogo.enabled,
         QRect(task->config().delogo.x, task->config().delogo.y, task->config().delogo.width, task->config().delogo.height));
 
+    // 设置源视频物理基准分辨率，确保水印/去水印在任何视口比例下绝对坐标对齐
+    if (task->mediaInfo().hasVideo()) {
+        if (const auto *v = task->mediaInfo().primaryVideo()) {
+            if (v->width > 0 && v->height > 0) {
+                d->viewport->setNativeSourceSize(QSize(v->width, v->height));
+                d->wmSpinX->setRange(0, std::max(3840, v->width));
+                d->wmSpinY->setRange(0, std::max(2160, v->height));
+                if (d->spinX) d->spinX->setRange(0, std::max(3840, v->width));
+                if (d->spinY) d->spinY->setRange(0, std::max(2160, v->height));
+                if (d->spinW) d->spinW->setRange(10, std::max(3840, v->width));
+                if (d->spinH) d->spinH->setRange(10, std::max(2160, v->height));
+            }
+        }
+    }
+
     // 停止正在播放的流并加载新流
     d->player->stop();
 
@@ -839,6 +870,10 @@ void LiveMonitorPage::selectTask(const QString &taskId) {
                 }
             });
         }
+    }
+
+    if (d->player->sourceVideoSize().isValid()) {
+        d->viewport->setNativeSourceSize(d->player->sourceVideoSize());
     }
 
     d->updateRunningState();

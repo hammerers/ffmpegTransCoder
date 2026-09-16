@@ -31,7 +31,20 @@ public:
     WatermarkConfig watermarkConfig;
 
     QRect rightVideoRect;
-    QSize origVideoSize;
+    QSize nativeSourceSize;
+
+    QSize getEffectiveNativeSize() const {
+        if (nativeSourceSize.width() > 0 && nativeSourceSize.height() > 0) {
+            return nativeSourceSize;
+        }
+        if (!originFrame.isNull()) {
+            return originFrame.size();
+        }
+        if (!processedFrame.isNull()) {
+            return processedFrame.size();
+        }
+        return QSize(1920, 1080);
+    }
 
     bool isHoveringWatermark{false};
     bool isDraggingWatermark{false};
@@ -39,11 +52,13 @@ public:
     QPoint dragStartWmOrigPos;
 
     QRect getWatermarkOrigRect() const {
-        if (!watermarkConfig.enabled || origVideoSize.width() <= 0 || origVideoSize.height() <= 0) {
+        if (!watermarkConfig.enabled) {
             return QRect();
         }
-        int fw = origVideoSize.width();
-        int fh = origVideoSize.height();
+        QSize natSize = getEffectiveNativeSize();
+        int fw = natSize.width();
+        int fh = natSize.height();
+        if (fw <= 0 || fh <= 0) return QRect();
         int wmWidth = 0;
         int wmHeight = 0;
 
@@ -52,8 +67,11 @@ public:
             QImage img(watermarkConfig.imagePath);
             if (img.isNull()) return QRect();
             float s = std::clamp(watermarkConfig.scale, 0.1f, 3.0f);
-            wmWidth = std::max(10, static_cast<int>(img.width() * s));
-            wmHeight = std::max(10, static_cast<int>(img.height() * s));
+            int nw = std::clamp(static_cast<int>(img.width() * s), 10, fw);
+            int nh = std::clamp(static_cast<int>(img.height() * s), 10, fh);
+            QSize scaledSize = img.size().scaled(nw, nh, Qt::KeepAspectRatio);
+            wmWidth = std::max(10, scaledSize.width());
+            wmHeight = std::max(10, scaledSize.height());
         } else {
             if (watermarkConfig.text.isEmpty()) return QRect();
             QFont font("Segoe UI");
@@ -98,16 +116,17 @@ public:
 
     QRect getWatermarkScreenRect() const {
         QRect origWm = getWatermarkOrigRect();
-        if (origWm.isEmpty() || rightVideoRect.isEmpty() || origVideoSize.width() <= 0 || origVideoSize.height() <= 0) {
+        QSize natSize = getEffectiveNativeSize();
+        if (origWm.isEmpty() || rightVideoRect.isEmpty() || natSize.width() <= 0 || natSize.height() <= 0) {
             return QRect();
         }
-        float sx = static_cast<float>(rightVideoRect.width()) / static_cast<float>(origVideoSize.width());
-        float sy = static_cast<float>(rightVideoRect.height()) / static_cast<float>(origVideoSize.height());
+        float sx = static_cast<float>(rightVideoRect.width()) / static_cast<float>(natSize.width());
+        float sy = static_cast<float>(rightVideoRect.height()) / static_cast<float>(natSize.height());
 
-        int sxPos = rightVideoRect.x() + static_cast<int>(origWm.x() * sx);
-        int syPos = rightVideoRect.y() + static_cast<int>(origWm.y() * sy);
-        int sW = static_cast<int>(origWm.width() * sx);
-        int sH = static_cast<int>(origWm.height() * sy);
+        int sxPos = rightVideoRect.x() + static_cast<int>(std::round(origWm.x() * sx));
+        int syPos = rightVideoRect.y() + static_cast<int>(std::round(origWm.y() * sy));
+        int sW = std::max(4, static_cast<int>(std::round(origWm.width() * sx)));
+        int sH = std::max(4, static_cast<int>(std::round(origWm.height() * sy)));
 
         return QRect(sxPos, syPos, sW, sH);
     }
@@ -128,17 +147,28 @@ public:
     void refreshProcessedFrame() {
         if (originFrame.isNull()) {
             processedFrame = QImage();
-            origVideoSize = QSize();
             return;
         }
-        origVideoSize = originFrame.size();
         if (!isStaticPreview) return; // 实时流由引擎直接提供
 
         processedFrame = originFrame.copy();
+        QSize natSize = getEffectiveNativeSize();
+        int natW = natSize.width();
+        int natH = natSize.height();
+        if (natW <= 0 || natH <= 0) return;
 
-        // 1. 去水印平滑处理
+        int fw = processedFrame.width();
+        int fh = processedFrame.height();
+        float scaleX = static_cast<float>(fw) / static_cast<float>(natW);
+        float scaleY = static_cast<float>(fh) / static_cast<float>(natH);
+
+        // 1. 去水印平滑处理 (将源视频基准坐标等比映射至预览帧空间)
         if (delogoEnabled && !delogoRect.isEmpty() && delogoRect.isValid()) {
-            QRect r = delogoRect.intersected(processedFrame.rect());
+            int dx = static_cast<int>(std::round(delogoRect.x() * scaleX));
+            int dy = static_cast<int>(std::round(delogoRect.y() * scaleY));
+            int dw = static_cast<int>(std::round(delogoRect.width() * scaleX));
+            int dh = static_cast<int>(std::round(delogoRect.height() * scaleY));
+            QRect r = QRect(dx, dy, dw, dh).intersected(processedFrame.rect());
             if (r.width() > 2 && r.height() > 2) {
                 int x0 = r.left(), y0 = r.top(), x1 = r.right(), y1 = r.bottom();
                 int w = r.width(), h = r.height();
@@ -165,106 +195,94 @@ public:
             }
         }
 
-        // 2. 自定义水印实时叠加模拟
+        // 2. 自定义水印实时叠加模拟 (基于源视频坐标等比换算，绝不产生物理错位)
         if (watermarkConfig.enabled) {
-            QPainter p(&processedFrame);
-            p.setRenderHint(QPainter::Antialiasing, true);
-            p.setRenderHint(QPainter::SmoothPixmapTransform, true);
-            p.setOpacity(std::clamp(watermarkConfig.opacity, 0.05f, 1.0f));
+            QRect origWm = getWatermarkOrigRect();
+            if (!origWm.isEmpty()) {
+                QPainter p(&processedFrame);
+                p.setRenderHint(QPainter::Antialiasing, true);
+                p.setRenderHint(QPainter::SmoothPixmapTransform, true);
+                p.setOpacity(std::clamp(watermarkConfig.opacity, 0.05f, 1.0f));
 
-            int fw = processedFrame.width();
-            int fh = processedFrame.height();
+                int targetX = static_cast<int>(std::round(origWm.x() * scaleX));
+                int targetY = static_cast<int>(std::round(origWm.y() * scaleY));
+                int targetW = std::max(4, static_cast<int>(std::round(origWm.width() * scaleX)));
+                int targetH = std::max(4, static_cast<int>(std::round(origWm.height() * scaleY)));
 
-            if (watermarkConfig.type == WatermarkType::Image && !watermarkConfig.imagePath.isEmpty()) {
-                QImage img(watermarkConfig.imagePath);
-                if (!img.isNull()) {
-                    float s = std::clamp(watermarkConfig.scale, 0.1f, 3.0f);
-                    int nw = std::max(10, static_cast<int>(img.width() * s));
-                    int nh = std::max(10, static_cast<int>(img.height() * s));
-                    QImage scaledImg = img.scaled(nw, nh, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-
-                    int tx = watermarkConfig.x;
-                    int ty = watermarkConfig.y;
-                    switch (watermarkConfig.position) {
-                    case WatermarkPosition::TopRight:
-                        tx = fw - scaledImg.width() - watermarkConfig.x;
-                        ty = watermarkConfig.y;
-                        break;
-                    case WatermarkPosition::TopLeft:
-                        tx = watermarkConfig.x;
-                        ty = watermarkConfig.y;
-                        break;
-                    case WatermarkPosition::BottomRight:
-                        tx = fw - scaledImg.width() - watermarkConfig.x;
-                        ty = fh - scaledImg.height() - watermarkConfig.y;
-                        break;
-                    case WatermarkPosition::BottomLeft:
-                        tx = watermarkConfig.x;
-                        ty = fh - scaledImg.height() - watermarkConfig.y;
-                        break;
-                    case WatermarkPosition::Center:
-                        tx = (fw - scaledImg.width()) / 2;
-                        ty = (fh - scaledImg.height()) / 2;
-                        break;
-                    case WatermarkPosition::Custom:
-                        tx = watermarkConfig.x;
-                        ty = watermarkConfig.y;
-                        break;
+                if (watermarkConfig.type == WatermarkType::Image && !watermarkConfig.imagePath.isEmpty()) {
+                    QImage img(watermarkConfig.imagePath);
+                    if (!img.isNull()) {
+                        QImage scaledImg = img.scaled(targetW, targetH, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                        p.drawImage(targetX, targetY, scaledImg);
                     }
-                    p.drawImage(tx, ty, scaledImg);
+                } else if (watermarkConfig.type == WatermarkType::Text && !watermarkConfig.text.isEmpty()) {
+                    int effFontSize = std::clamp(static_cast<int>(std::round(watermarkConfig.fontSize * scaleY)), 8, std::max(10, fh / 2));
+                    QFont font("Segoe UI");
+                    font.setPixelSize(effFontSize);
+                    font.setBold(true);
+
+                    QRect box(targetX, targetY, targetW, targetH);
+                    p.setBrush(QColor(15, 23, 42, 160));
+                    p.setPen(Qt::NoPen);
+                    int radius = std::max(2, static_cast<int>(std::round(4.0f * scaleY)));
+                    p.drawRoundedRect(box, radius, radius);
+
+                    QColor tc(watermarkConfig.fontColor);
+                    if (!tc.isValid()) tc = Qt::white;
+                    p.setPen(tc);
+                    p.setFont(font);
+                    p.drawText(box, Qt::AlignCenter, watermarkConfig.text);
                 }
-            } else if (watermarkConfig.type == WatermarkType::Text && !watermarkConfig.text.isEmpty()) {
-                QFont font("Segoe UI");
-                font.setPixelSize(std::clamp(watermarkConfig.fontSize, 10, 200));
-                font.setBold(true);
-                QFontMetrics fm(font);
-                QRect textRect = fm.boundingRect(watermarkConfig.text);
-                int padH = 8;
-                int padV = 4;
-                int tw = textRect.width() + padH * 2;
-                int th = textRect.height() + padV * 2;
-
-                int tx = watermarkConfig.x;
-                int ty = watermarkConfig.y;
-                switch (watermarkConfig.position) {
-                case WatermarkPosition::TopRight:
-                    tx = fw - tw - watermarkConfig.x;
-                    ty = watermarkConfig.y;
-                    break;
-                case WatermarkPosition::TopLeft:
-                    tx = watermarkConfig.x;
-                    ty = watermarkConfig.y;
-                    break;
-                case WatermarkPosition::BottomRight:
-                    tx = fw - tw - watermarkConfig.x;
-                    ty = fh - th - watermarkConfig.y;
-                    break;
-                case WatermarkPosition::BottomLeft:
-                    tx = watermarkConfig.x;
-                    ty = fh - th - watermarkConfig.y;
-                    break;
-                case WatermarkPosition::Center:
-                    tx = (fw - tw) / 2;
-                    ty = (fh - th) / 2;
-                    break;
-                case WatermarkPosition::Custom:
-                    tx = watermarkConfig.x;
-                    ty = watermarkConfig.y;
-                    break;
-                }
-
-                QRect box(tx, ty, tw, th);
-                p.setBrush(QColor(15, 23, 42, 160));
-                p.setPen(Qt::NoPen);
-                p.drawRoundedRect(box, 4, 4);
-
-                QColor tc(watermarkConfig.fontColor);
-                if (!tc.isValid()) tc = Qt::white;
-                p.setPen(tc);
-                p.setFont(font);
-                p.drawText(box, Qt::AlignCenter, watermarkConfig.text);
             }
         }
+    }
+
+    void drawWatermarkOverlay(QPainter &p) {
+        if (!watermarkConfig.enabled || rightVideoRect.isEmpty()) return;
+        QRect screenWm = getWatermarkScreenRect();
+        if (screenWm.isEmpty()) return;
+
+        p.save();
+        p.setRenderHint(QPainter::Antialiasing, true);
+
+        QRect box = screenWm.adjusted(-3, -3, 3, 3);
+
+        if (isHoveringWatermark || isDraggingWatermark) {
+            p.setPen(QPen(QColor("#38bdf8"), 2, Qt::DashLine));
+            p.setBrush(QColor(56, 189, 248, 35));
+            p.drawRoundedRect(box, 4, 4);
+
+            int hs = 6;
+            p.setPen(Qt::NoPen);
+            p.setBrush(QColor("#38bdf8"));
+            p.drawRect(box.left() - hs / 2, box.top() - hs / 2, hs, hs);
+            p.drawRect(box.right() - hs / 2, box.top() - hs / 2, hs, hs);
+            p.drawRect(box.left() - hs / 2, box.bottom() - hs / 2, hs, hs);
+            p.drawRect(box.right() - hs / 2, box.bottom() - hs / 2, hs, hs);
+
+            QString tip = QString("水印坐标: %1, %2 (按住拖拽)").arg(watermarkConfig.x).arg(watermarkConfig.y);
+            QFont f = p.font();
+            f.setPixelSize(10);
+            f.setBold(true);
+            p.setFont(f);
+            QFontMetrics fm(f);
+            int tw = fm.horizontalAdvance(tip) + 12;
+
+            int tipY = (box.top() - 22 >= rightVideoRect.top()) ? (box.top() - 22) : (box.bottom() + 6);
+            int tipX = std::clamp(box.left(), rightVideoRect.left(), std::max(rightVideoRect.left(), rightVideoRect.right() - tw));
+            QRect tipBox(tipX, tipY, tw, 18);
+
+            p.setBrush(QColor(15, 23, 42, 230));
+            p.drawRoundedRect(tipBox, 3, 3);
+            p.setPen(QColor("#38bdf8"));
+            p.drawText(tipBox, Qt::AlignCenter, tip);
+        } else {
+            p.setPen(QPen(QColor(56, 189, 248, 90), 1, Qt::DashLine));
+            p.setBrush(Qt::NoBrush);
+            p.drawRoundedRect(box, 4, 4);
+        }
+
+        p.restore();
     }
 
     void drawDelogoBox(QPainter &p, int ox, int oy, int scaledW, int scaledH, const QSize &origSize) {
@@ -391,6 +409,20 @@ void VideoCompareWidget::setWatermarkConfig(const WatermarkConfig &cfg) {
     update();
 }
 
+void VideoCompareWidget::setNativeSourceSize(const QSize &size) {
+    Q_D(VideoCompareWidget);
+    if (d->nativeSourceSize == size) return;
+    d->nativeSourceSize = size;
+    if (d->isStaticPreview) {
+        d->refreshProcessedFrame();
+    }
+    update();
+}
+
+QSize VideoCompareWidget::nativeSourceSize() const {
+    return d_ptr->nativeSourceSize;
+}
+
 bool VideoCompareWidget::hasFrames() const {
     return !d_ptr->originFrame.isNull() || !d_ptr->processedFrame.isNull();
 }
@@ -440,6 +472,8 @@ void VideoCompareWidget::resetToIdle() {
     Q_D(VideoCompareWidget);
     d->originFrame = QImage();
     d->processedFrame = QImage();
+    d->nativeSourceSize = QSize();
+    d->rightVideoRect = QRect();
     d->currentPts = 0.0;
     d->frameCount = 0;
     d->isStaticPreview = false;
@@ -504,7 +538,7 @@ void VideoCompareWidget::paintEvent(QPaintEvent *) {
             p.drawImage(ox, oy, scaledOrigin);
 
             // 在原画侧绘制去水印 ROI 选区框
-            d->drawDelogoBox(p, ox, oy, scaledOrigin.width(), scaledOrigin.height(), d->originFrame.size());
+            d->drawDelogoBox(p, ox, oy, scaledOrigin.width(), scaledOrigin.height(), d->getEffectiveNativeSize());
         }
 
         // 绘制处理后画面 (右)
@@ -515,43 +549,7 @@ void VideoCompareWidget::paintEvent(QPaintEvent *) {
             p.drawImage(px, py, scaledProc);
 
             d->rightVideoRect = QRect(px, py, scaledProc.width(), scaledProc.height());
-            d->origVideoSize = d->processedFrame.size();
-
-            // 如果启用了自定义水印，并在悬浮或拖拽中，绘制虚线边框与四角定位手柄及浮动坐标
-            if (d->watermarkConfig.enabled) {
-                QRect screenWm = d->getWatermarkScreenRect();
-                if (!screenWm.isEmpty() && (d->isHoveringWatermark || d->isDraggingWatermark)) {
-                    p.save();
-                    p.setRenderHint(QPainter::Antialiasing, true);
-                    p.setPen(QPen(QColor("#38bdf8"), 2, Qt::DashLine));
-                    p.setBrush(QColor(56, 189, 248, 25));
-                    p.drawRoundedRect(screenWm.adjusted(-3, -3, 3, 3), 4, 4);
-
-                    // 四角定位手柄
-                    int hs = 6;
-                    p.setPen(Qt::NoPen);
-                    p.setBrush(QColor("#38bdf8"));
-                    p.drawRect(screenWm.left() - 3 - hs/2, screenWm.top() - 3 - hs/2, hs, hs);
-                    p.drawRect(screenWm.right() + 3 - hs/2, screenWm.top() - 3 - hs/2, hs, hs);
-                    p.drawRect(screenWm.left() - 3 - hs/2, screenWm.bottom() + 3 - hs/2, hs, hs);
-                    p.drawRect(screenWm.right() + 3 - hs/2, screenWm.bottom() + 3 - hs/2, hs, hs);
-
-                    // 浮动坐标指示与拖拽提示
-                    QString tip = QString("水印坐标: %1, %2 (按住拖拽)").arg(d->watermarkConfig.x).arg(d->watermarkConfig.y);
-                    QFont f = p.font();
-                    f.setPixelSize(10);
-                    f.setBold(true);
-                    p.setFont(f);
-                    QFontMetrics fm(f);
-                    int tw = fm.horizontalAdvance(tip) + 12;
-                    QRect tipBox(screenWm.left() - 3, std::max(0, screenWm.top() - 20), tw, 18);
-                    p.setBrush(QColor(15, 23, 42, 230));
-                    p.drawRoundedRect(tipBox, 3, 3);
-                    p.setPen(QColor("#38bdf8"));
-                    p.drawText(tipBox, Qt::AlignCenter, tip);
-                    p.restore();
-                }
-            }
+            d->drawWatermarkOverlay(p);
         } else {
             d->rightVideoRect = QRect();
         }
@@ -581,7 +579,7 @@ void VideoCompareWidget::paintEvent(QPaintEvent *) {
         p.setClipRect(0, 0, splitX, h);
         if (!scaledOrigin.isNull()) {
             p.drawImage(ox, oy, scaledOrigin);
-            d->drawDelogoBox(p, ox, oy, scaledOrigin.width(), scaledOrigin.height(), d->originFrame.size());
+            d->drawDelogoBox(p, ox, oy, scaledOrigin.width(), scaledOrigin.height(), d->getEffectiveNativeSize());
         }
         p.restore();
 
@@ -589,6 +587,10 @@ void VideoCompareWidget::paintEvent(QPaintEvent *) {
         p.setClipRect(splitX, 0, w - splitX, h);
         if (!scaledProc.isNull()) {
             p.drawImage(ox, oy, scaledProc);
+            d->rightVideoRect = QRect(ox, oy, scaledProc.width(), scaledProc.height());
+            d->drawWatermarkOverlay(p);
+        } else {
+            d->rightVideoRect = QRect();
         }
         p.restore();
 
@@ -612,6 +614,10 @@ void VideoCompareWidget::paintEvent(QPaintEvent *) {
             int px = (w - scaledProc.width()) / 2;
             int py = (h - scaledProc.height()) / 2;
             p.drawImage(px, py, scaledProc);
+            d->rightVideoRect = QRect(px, py, scaledProc.width(), scaledProc.height());
+            d->drawWatermarkOverlay(p);
+        } else {
+            d->rightVideoRect = QRect();
         }
         d->drawBadge(p, QRect(10, 10, 120, 22), rightBadgeText, QColor(15, 23, 42, 200), QColor("#34d399"));
     }
@@ -636,45 +642,48 @@ void VideoCompareWidget::mousePressEvent(QMouseEvent *event) {
 
 void VideoCompareWidget::mouseMoveEvent(QMouseEvent *event) {
     Q_D(VideoCompareWidget);
-    if (d->watermarkConfig.enabled && !d->rightVideoRect.isEmpty() && d->origVideoSize.width() > 0 && d->origVideoSize.height() > 0) {
-        if (d->isDraggingWatermark) {
-            QPoint delta = event->pos() - d->dragStartMousePos;
-            float sx = static_cast<float>(d->rightVideoRect.width()) / static_cast<float>(d->origVideoSize.width());
-            float sy = static_cast<float>(d->rightVideoRect.height()) / static_cast<float>(d->origVideoSize.height());
-            int origDx = (sx > 0.0001f) ? static_cast<int>(delta.x() / sx) : 0;
-            int origDy = (sy > 0.0001f) ? static_cast<int>(delta.y() / sy) : 0;
+    if (d->watermarkConfig.enabled && !d->rightVideoRect.isEmpty()) {
+        QSize natSize = d->getEffectiveNativeSize();
+        if (natSize.width() > 0 && natSize.height() > 0) {
+            if (d->isDraggingWatermark) {
+                QPoint delta = event->pos() - d->dragStartMousePos;
+                float sx = static_cast<float>(d->rightVideoRect.width()) / static_cast<float>(natSize.width());
+                float sy = static_cast<float>(d->rightVideoRect.height()) / static_cast<float>(natSize.height());
+                int origDx = (sx > 0.0001f) ? static_cast<int>(std::round(delta.x() / sx)) : 0;
+                int origDy = (sy > 0.0001f) ? static_cast<int>(std::round(delta.y() / sy)) : 0;
 
-            QRect origWm = d->getWatermarkOrigRect();
-            int newX = std::clamp(d->dragStartWmOrigPos.x() + origDx, 0, std::max(0, d->origVideoSize.width() - origWm.width()));
-            int newY = std::clamp(d->dragStartWmOrigPos.y() + origDy, 0, std::max(0, d->origVideoSize.height() - origWm.height()));
+                QRect origWm = d->getWatermarkOrigRect();
+                int newX = std::clamp(d->dragStartWmOrigPos.x() + origDx, 0, std::max(0, natSize.width() - origWm.width()));
+                int newY = std::clamp(d->dragStartWmOrigPos.y() + origDy, 0, std::max(0, natSize.height() - origWm.height()));
 
-            d->watermarkConfig.position = WatermarkPosition::Custom;
-            d->watermarkConfig.x = newX;
-            d->watermarkConfig.y = newY;
+                d->watermarkConfig.position = WatermarkPosition::Custom;
+                d->watermarkConfig.x = newX;
+                d->watermarkConfig.y = newY;
 
-            if (d->isStaticPreview) {
-                d->refreshProcessedFrame();
-            }
-            update();
-            emit watermarkConfigChanged(d->watermarkConfig);
-            setCursor(Qt::ClosedHandCursor);
-            return;
-        } else {
-            QRect screenWm = d->getWatermarkScreenRect();
-            bool overWm = !screenWm.isEmpty() && screenWm.adjusted(-8, -8, 8, 8).contains(event->pos());
-            if (overWm) {
-                if (!d->isHoveringWatermark) {
-                    d->isHoveringWatermark = true;
-                    update();
+                if (d->isStaticPreview) {
+                    d->refreshProcessedFrame();
                 }
-                setCursor(Qt::SizeAllCursor);
+                update();
+                emit watermarkConfigChanged(d->watermarkConfig);
+                setCursor(Qt::ClosedHandCursor);
                 return;
             } else {
-                if (d->isHoveringWatermark) {
-                    d->isHoveringWatermark = false;
-                    update();
+                QRect screenWm = d->getWatermarkScreenRect();
+                bool overWm = !screenWm.isEmpty() && screenWm.adjusted(-8, -8, 8, 8).contains(event->pos());
+                if (overWm) {
+                    if (!d->isHoveringWatermark) {
+                        d->isHoveringWatermark = true;
+                        update();
+                    }
+                    setCursor(Qt::SizeAllCursor);
+                    return;
+                } else {
+                    if (d->isHoveringWatermark) {
+                        d->isHoveringWatermark = false;
+                        update();
+                    }
+                    setCursor(Qt::ArrowCursor);
                 }
-                setCursor(Qt::ArrowCursor);
             }
         }
     } else {

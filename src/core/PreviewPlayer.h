@@ -37,6 +37,9 @@ public:
     double playbackSpeed() const;
     void setPlaybackSpeed(double speed);
 
+    QSize sourceVideoSize() const;
+    QSize comparedVideoSize() const;
+
 public slots:
     void play();
     void pause();

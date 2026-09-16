@@ -480,4 +480,22 @@ void PreviewPlayer::stop() {
     seek(0.0);
 }
 
+QSize PreviewPlayer::sourceVideoSize() const {
+    Q_D(const PreviewPlayer);
+    std::lock_guard<std::mutex> lock(const_cast<PreviewPlayerPrivate*>(d)->decoderMtx);
+    if (d->sourceDecoder.codecCtx && d->sourceDecoder.codecCtx->width > 0) {
+        return QSize(d->sourceDecoder.codecCtx->width, d->sourceDecoder.codecCtx->height);
+    }
+    return QSize();
+}
+
+QSize PreviewPlayer::comparedVideoSize() const {
+    Q_D(const PreviewPlayer);
+    std::lock_guard<std::mutex> lock(const_cast<PreviewPlayerPrivate*>(d)->decoderMtx);
+    if (d->comparedDecoder.codecCtx && d->comparedDecoder.codecCtx->width > 0) {
+        return QSize(d->comparedDecoder.codecCtx->width, d->comparedDecoder.codecCtx->height);
+    }
+    return QSize();
+}
+
 } // namespace ffmpeg_transform

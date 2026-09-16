@@ -172,6 +172,11 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     std::cout << "  SingleSource mode opened successfully. Duration: " << player.duration() << "s\n";
+    std::cout << "  Source video size: " << player.sourceVideoSize().width() << "x" << player.sourceVideoSize().height() << std::endl;
+    if (!player.sourceVideoSize().isValid() || player.sourceVideoSize().width() <= 0) {
+        std::cerr << "[FAIL] Invalid sourceVideoSize in PreviewPlayer!" << std::endl;
+        return 1;
+    }
 
     bool openDual = player.open(testVideo, videoCfg.outputPath);
     if (!openDual || player.mode() != PlaybackMode::DualSource) {
@@ -179,6 +184,11 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     std::cout << "  DualSource mode opened successfully (Source vs Result).\n";
+    std::cout << "  Compared video size: " << player.comparedVideoSize().width() << "x" << player.comparedVideoSize().height() << std::endl;
+    if (!player.comparedVideoSize().isValid() || player.comparedVideoSize().width() <= 0) {
+        std::cerr << "[FAIL] Invalid comparedVideoSize in PreviewPlayer!" << std::endl;
+        return 1;
+    }
 
     player.play();
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
