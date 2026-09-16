@@ -1,5 +1,7 @@
 #include "LiveMonitorPage.h"
 #include "VideoCompareWidget.h"
+#include "VideoPlayControlBar.h"
+#include "core/PreviewPlayer.h"
 #include "manager/TranscodeTaskManager.h"
 #include "manager/TranscodeTask.h"
 #include <QVBoxLayout>
@@ -32,6 +34,8 @@ public:
     QLabel *taskNameLabel{nullptr};
 
     VideoCompareWidget *viewport{nullptr};
+    VideoPlayControlBar *playBar{nullptr};
+    PreviewPlayer *player{nullptr};
 
     // 底部工具与检视任务选择
     QComboBox *taskCombo{nullptr};
@@ -73,16 +77,28 @@ public:
             updateTaskItem(task);
         });
         QObject::connect(task, &TranscodeTask::thumbnailLoaded, q_ptr, [this, task](const QImage &img) {
-            if (currentTaskId == task->id() && !viewport->hasFrames()) {
+            if (currentTaskId == task->id() && !viewport->hasFrames() && (!player || !player->isOpened())) {
                 viewport->setStaticPreview(img, QFileInfo(task->inputFilePath()).fileName());
             }
         });
         QObject::connect(task, &TranscodeTask::progressChanged, q_ptr, [this, task](const TranscodeProgress &) {
             updateTaskItem(task);
         });
-        QObject::connect(task, &TranscodeTask::stateChanged, q_ptr, [this, task](TaskState) {
+        QObject::connect(task, &TranscodeTask::stateChanged, q_ptr, [this, task](TaskState state) {
             updateTaskItem(task);
             updateRunningState();
+            if (currentTaskId == task->id()) {
+                if (state == TaskState::Converting) {
+                    if (player) player->stop();
+                    if (playBar) {
+                        playBar->setControlEnabled(false);
+                        playBar->setPlaybackMode("idle");
+                        playBar->setModeDescription("压制中");
+                    }
+                } else if (state == TaskState::Completed) {
+                    q_ptr->selectTask(task->id());
+                }
+            }
         });
     }
 
@@ -248,6 +264,9 @@ public:
         viewport = new VideoCompareWidget(leftArea);
         viewport->setCompareMode(CompareMode::SideBySide);
         leftLayout->addWidget(viewport, 1);
+
+        playBar = new VideoPlayControlBar(leftArea);
+        leftLayout->addWidget(playBar);
 
         // 3. 底部算法与滤镜参数控制条
         auto *bottomCard = new QFrame(leftArea);
@@ -510,10 +529,52 @@ public:
 
         mainLayout->addLayout(centerLayout, 1);
 
+        player = new PreviewPlayer(q_ptr);
+
         bindEvents();
     }
 
     void bindEvents() {
+        // 播放引擎与视口画面呈现联动
+        QObject::connect(player, &PreviewPlayer::frameReady, q_ptr, [this](const QImage &origin, const QImage &compared, double ptsSec) {
+            if (compared.isNull()) {
+                viewport->updatePreviewFrame(origin, ptsSec);
+            } else {
+                viewport->updateFrames(origin, compared, ptsSec);
+            }
+        });
+
+        // 播放引擎进度与控制条联动
+        QObject::connect(player, &PreviewPlayer::positionChanged, q_ptr, [this](double curSec, double totalSec) {
+            playBar->setPosition(curSec, totalSec);
+        });
+
+        QObject::connect(player, &PreviewPlayer::playbackStateChanged, q_ptr, [this](bool isPlaying) {
+            playBar->setPlaying(isPlaying);
+        });
+
+        QObject::connect(player, &PreviewPlayer::mediaOpened, q_ptr, [this](PlaybackMode mode, double durationSec) {
+            if (mode == PlaybackMode::SingleSource) {
+                playBar->setPlaybackMode("single");
+            } else if (mode == PlaybackMode::DualSource) {
+                playBar->setPlaybackMode("dual");
+            } else {
+                playBar->setPlaybackMode("idle");
+            }
+            playBar->setDuration(durationSec);
+        });
+
+        QObject::connect(player, &PreviewPlayer::playbackEnded, q_ptr, [this]() {
+            playBar->setPlaying(false);
+        });
+
+        // 控制条操作指令联动至播放引擎
+        QObject::connect(playBar, &VideoPlayControlBar::playClicked, player, &PreviewPlayer::play);
+        QObject::connect(playBar, &VideoPlayControlBar::pauseClicked, player, &PreviewPlayer::pause);
+        QObject::connect(playBar, &VideoPlayControlBar::stopClicked, player, &PreviewPlayer::stop);
+        QObject::connect(playBar, &VideoPlayControlBar::seekRequested, player, &PreviewPlayer::seek);
+        QObject::connect(playBar, &VideoPlayControlBar::speedChanged, player, &PreviewPlayer::setPlaybackSpeed);
+
         // 视频画面拖拽水印联动
         QObject::connect(viewport, &VideoCompareWidget::watermarkConfigChanged, [this](const WatermarkConfig &cfg) {
             wmSpinX->blockSignals(true);
@@ -737,7 +798,6 @@ void LiveMonitorPage::selectTask(const QString &taskId) {
     if (!task) return;
 
     QString fileName = QFileInfo(task->inputFilePath()).fileName();
-    d->taskNameLabel->setText(QString("当前状态: 待命调参 (已加载: %1)").arg(fileName));
 
     // 回显该任务专属的水印与去水印配置 (内部带完整的 blockSignals，绝不会反向产生误覆盖)
     setWatermarkConfig(task->config().watermark);
@@ -748,16 +808,37 @@ void LiveMonitorPage::selectTask(const QString &taskId) {
     d->viewport->setDelogoHighlight(task->config().delogo.enabled,
         QRect(task->config().delogo.x, task->config().delogo.y, task->config().delogo.width, task->config().delogo.height));
 
-    QImage thumb = task->thumbnail();
-    if (!thumb.isNull()) {
-        d->viewport->setStaticPreview(thumb, fileName);
+    // 停止正在播放的流并加载新流
+    d->player->stop();
+
+    QString inputPath = task->inputFilePath();
+    QString outputPath = task->config().outputPath;
+    bool isCompleted = (task->state() == TaskState::Completed) && !outputPath.isEmpty() && QFile::exists(outputPath);
+
+    if (task->state() == TaskState::Converting) {
+        d->taskNameLabel->setText(QString("当前状态: 正在实时压制渲染 (%1)").arg(fileName));
+        d->playBar->setControlEnabled(false);
+        d->playBar->setPlaybackMode("idle");
+        d->playBar->setModeDescription("压制中");
+    } else if (isCompleted) {
+        d->taskNameLabel->setText(QString("当前状态: 转码已完成 (双流同步对比: %1)").arg(fileName));
+        d->player->open(inputPath, outputPath);
+    } else if (!inputPath.isEmpty() && QFile::exists(inputPath)) {
+        d->taskNameLabel->setText(QString("当前状态: 待命调参 (单流动态预览: %1)").arg(fileName));
+        d->player->open(inputPath);
     } else {
-        d->viewport->resetToIdle();
-        QObject::connect(task, &TranscodeTask::thumbnailLoaded, this, [d, task](const QImage &img) {
-            if (d->currentTaskId == task->id() && !d->viewport->hasFrames()) {
-                d->viewport->setStaticPreview(img, QFileInfo(task->inputFilePath()).fileName());
-            }
-        });
+        d->taskNameLabel->setText(QString("当前状态: 待命调参 (已加载: %1)").arg(fileName));
+        QImage thumb = task->thumbnail();
+        if (!thumb.isNull()) {
+            d->viewport->setStaticPreview(thumb, fileName);
+        } else {
+            d->viewport->resetToIdle();
+            QObject::connect(task, &TranscodeTask::thumbnailLoaded, this, [d, task](const QImage &img) {
+                if (d->currentTaskId == task->id() && !d->viewport->hasFrames()) {
+                    d->viewport->setStaticPreview(img, QFileInfo(task->inputFilePath()).fileName());
+                }
+            });
+        }
     }
 
     d->updateRunningState();
@@ -822,6 +903,14 @@ WatermarkConfig LiveMonitorPage::watermarkConfig() const {
 void LiveMonitorPage::updateLiveFrame(const QString &taskName, const QImage &origin, const QImage &processed, double ptsSec) {
     Q_D(LiveMonitorPage);
     d->taskNameLabel->setText(QString("正在实时压制渲染: %1").arg(taskName));
+    if (d->player && d->player->isPlaying()) {
+        d->player->stop();
+    }
+    if (d->playBar) {
+        d->playBar->setControlEnabled(false);
+        d->playBar->setPlaybackMode("idle");
+        d->playBar->setModeDescription("压制中");
+    }
     d->viewport->updateFrames(origin, processed, ptsSec);
     d->updateRunningState();
 }
@@ -833,14 +922,22 @@ void LiveMonitorPage::setHwAccelStatus(const QString &) {
 void LiveMonitorPage::resetToIdle() {
     Q_D(LiveMonitorPage);
     d->taskNameLabel->setText("当前状态: 暂无活跃转码流");
+    if (d->player) d->player->close();
+    if (d->playBar) d->playBar->reset();
     d->viewport->resetToIdle();
     d->updateRunningState();
 }
 
 void LiveMonitorPage::showCompletedState() {
     Q_D(LiveMonitorPage);
-    d->taskNameLabel->setText("当前状态: 转码已完成 (保留最终成品画质对比，可拖拽卷帘检视)");
+    d->taskNameLabel->setText("当前状态: 转码已完成 (双流同步对比播放已就绪，可拖拽卷帘检视)");
     d->viewport->setCompleted(true, "转码已完成");
+    if (d->manager && !d->currentTaskId.isEmpty()) {
+        auto *task = d->manager->getTask(d->currentTaskId);
+        if (task && !task->config().outputPath.isEmpty() && QFile::exists(task->config().outputPath)) {
+            d->player->open(task->inputFilePath(), task->config().outputPath);
+        }
+    }
     d->updateRunningState();
 }
 

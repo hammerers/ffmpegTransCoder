@@ -43,6 +43,7 @@ public slots:
     void setStaticPreview(const QImage &origin, const QString &taskName = QString());
     void setCompleted(bool completed, const QString &summaryText = QString());
     void updateFrames(const QImage &origin, const QImage &processed, double ptsSec);
+    void updatePreviewFrame(const QImage &origin, double ptsSec);
     void resetToIdle();
 
 signals:

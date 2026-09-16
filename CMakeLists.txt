@@ -46,6 +46,8 @@ add_library(transcoder_core STATIC
     src/core/ThumbnailExtractor.cpp
     src/core/TranscodeEngine.h
     src/core/TranscodeEngine.cpp
+    src/core/PreviewPlayer.h
+    src/core/PreviewPlayer.cpp
     src/manager/TranscodeTask.h
     src/manager/TranscodeTask.cpp
     src/manager/TranscodeTaskManager.h
@@ -92,6 +94,8 @@ add_executable(FFmpegVideoTransform WIN32
     src/ui/TaskListView.cpp
     src/ui/VideoCompareWidget.h
     src/ui/VideoCompareWidget.cpp
+    src/ui/VideoPlayControlBar.h
+    src/ui/VideoPlayControlBar.cpp
     src/ui/LiveMonitorPage.h
     src/ui/LiveMonitorPage.cpp
     src/resources/app.qrc

@@ -2,12 +2,15 @@
 #include "core/MetadataExtractor.h"
 #include "core/ThumbnailExtractor.h"
 #include "core/TranscodeEngine.h"
+#include "core/PreviewPlayer.h"
 #include <QCoreApplication>
 #include <QDebug>
 #include <QFile>
 #include <QFileInfo>
 #include <QDir>
 #include <iostream>
+#include <thread>
+#include <chrono>
 
 using namespace ffmpeg_transform;
 
@@ -159,6 +162,31 @@ int main(int argc, char *argv[]) {
     std::cout << "  Output video generated: " << videoCfg.outputPath.toStdString()
               << " (" << QFileInfo(videoCfg.outputPath).size() << " bytes)\n";
     std::cout << "[PASS] TranscodeEngine (Video) test passed!" << std::endl;
+
+    // 5. 测试轻量级视频预览播放引擎 (单流调参预览 + 双流同步对比)
+    std::cout << "\n[TEST 5] Testing PreviewPlayer (Single and Dual mode)..." << std::endl;
+    PreviewPlayer player;
+    bool openSingle = player.open(testVideo);
+    if (!openSingle || player.mode() != PlaybackMode::SingleSource || player.duration() <= 0.0) {
+        std::cerr << "[FAIL] Failed to open PreviewPlayer in SingleSource mode!" << std::endl;
+        return 1;
+    }
+    std::cout << "  SingleSource mode opened successfully. Duration: " << player.duration() << "s\n";
+
+    bool openDual = player.open(testVideo, videoCfg.outputPath);
+    if (!openDual || player.mode() != PlaybackMode::DualSource) {
+        std::cerr << "[FAIL] Failed to open PreviewPlayer in DualSource mode!" << std::endl;
+        return 1;
+    }
+    std::cout << "  DualSource mode opened successfully (Source vs Result).\n";
+
+    player.play();
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    player.pause();
+    player.seek(1.0);
+    player.stop();
+    player.close();
+    std::cout << "[PASS] PreviewPlayer test passed!" << std::endl;
 
     std::cout << "\n========================================" << std::endl;
     std::cout << "  ALL CORE TESTS PASSED SUCCESSFULLY!  " << std::endl;

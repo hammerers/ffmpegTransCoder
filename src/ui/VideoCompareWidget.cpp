@@ -425,6 +425,17 @@ void VideoCompareWidget::updateFrames(const QImage &origin, const QImage &proces
     update();
 }
 
+void VideoCompareWidget::updatePreviewFrame(const QImage &origin, double ptsSec) {
+    Q_D(VideoCompareWidget);
+    d->originFrame = origin;
+    d->isStaticPreview = true;
+    d->isCompleted = false;
+    d->currentPts = ptsSec;
+    d->frameCount++;
+    d->refreshProcessedFrame();
+    update();
+}
+
 void VideoCompareWidget::resetToIdle() {
     Q_D(VideoCompareWidget);
     d->originFrame = QImage();

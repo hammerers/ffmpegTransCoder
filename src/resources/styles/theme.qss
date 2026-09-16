@@ -1217,3 +1217,144 @@ QSplitter::handle:hover {
     width: 0px;
     height: 0px;
 }
+
+/* ===================================================================
+   视频实时预览与同步对比播放控制条
+   =================================================================== */
+#videoPlayControlBar {
+    background-color: #171a23;
+    border: 1px solid #2b3142;
+    border-radius: 6px;
+}
+
+#btnPlayPause {
+    background-color: #0284c7;
+    color: #ffffff;
+    border: 1px solid #0ea5e9;
+    border-radius: 4px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+#btnPlayPause:hover {
+    background-color: #0369a1;
+    border-color: #38bdf8;
+}
+
+#btnPlayPause:pressed {
+    background-color: #075985;
+}
+
+#btnPlayPause:disabled {
+    background-color: #181a22;
+    color: #475569;
+    border-color: #232733;
+}
+
+#btnPlayStop {
+    background-color: #222632;
+    color: #94a3b8;
+    border: 1px solid #333a4c;
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+#btnPlayStop:hover {
+    background-color: #2a3040;
+    border-color: #475569;
+    color: #ffffff;
+}
+
+#btnPlayStop:disabled {
+    background-color: #181a22;
+    color: #475569;
+    border-color: #232733;
+}
+
+QSlider#playSlider::groove:horizontal {
+    height: 6px;
+    background-color: #222634;
+    border-radius: 3px;
+}
+
+QSlider#playSlider::sub-page:horizontal {
+    background-color: #0284c7;
+    border-radius: 3px;
+}
+
+QSlider#playSlider::handle:horizontal {
+    background-color: #38bdf8;
+    width: 14px;
+    height: 14px;
+    margin: -4px 0;
+    border-radius: 7px;
+    border: 1px solid #ffffff;
+}
+
+QSlider#playSlider::handle:horizontal:hover {
+    background-color: #7dd3fc;
+    border: 1px solid #38bdf8;
+}
+
+QSlider#playSlider:disabled {
+    background-color: transparent;
+}
+
+QSlider#playSlider::sub-page:horizontal:disabled {
+    background-color: #2b3142;
+}
+
+QSlider#playSlider::handle:horizontal:disabled {
+    background-color: #475569;
+    border: 1px solid #333a4c;
+}
+
+#playTimeLabel {
+    color: #94a3b8;
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+#playSpeedCombo {
+    background-color: #14161d;
+    border: 1px solid #333a4c;
+    border-radius: 4px;
+    color: #e2e8f0;
+    padding: 2px 6px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+#playSpeedCombo:focus {
+    border-color: #38bdf8;
+}
+
+#playModeBadge {
+    font-size: 11px;
+    font-weight: bold;
+    border-radius: 4px;
+    padding: 3px 10px;
+}
+
+#playModeBadge[mode="single"] {
+    background-color: rgba(14, 165, 233, 0.15);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.35);
+}
+
+#playModeBadge[mode="dual"] {
+    background-color: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(52, 211, 153, 0.35);
+}
+
+#playModeBadge[mode="idle"] {
+    background-color: rgba(100, 116, 139, 0.15);
+    color: #94a3b8;
+    border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
