@@ -35,8 +35,11 @@ public:
     void setSplitPosition(float pos);
 
     void setDelogoHighlight(bool enabled, const QRect &rect);
+    bool hasFrames() const;
 
 public slots:
+    void setStaticPreview(const QImage &origin, const QString &taskName = QString());
+    void setCompleted(bool completed, const QString &summaryText = QString());
     void updateFrames(const QImage &origin, const QImage &processed, double ptsSec);
     void resetToIdle();
 

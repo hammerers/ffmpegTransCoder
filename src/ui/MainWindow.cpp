@@ -103,6 +103,7 @@ public:
         mediaInspectorPage = new MediaInspectorPage(pageStack);
         mediaInspectorPage->setManager(&manager);
         liveMonitorPage = new LiveMonitorPage(pageStack);
+        liveMonitorPage->setManager(&manager);
 
         pageStack->addWidget(homePage);            // 0: 起始页面
         pageStack->addWidget(queuePage);           // 1: 编码队列
@@ -125,18 +126,21 @@ public:
         // 侧边栏切换页面联动
         QObject::connect(navSidebar, &NavSidebar::currentChanged, [this](int index) {
             pageStack->setCurrentIndex(index);
+            if (index == 5) {
+                liveMonitorPage->checkAndLoadPreview();
+            }
         });
 
         // 实时双分屏画面渲染联动
         QObject::connect(&manager, &TranscodeTaskManager::taskFrameRendered,
                          [this](TranscodeTask *task, const QImage &origin, const QImage &processed, double pts) {
-            QString name = task ? task->mediaInfo().fileName : "视频流";
+            QString name = task ? (task->mediaInfo().fileName.isEmpty() ? QFileInfo(task->inputFilePath()).fileName() : task->mediaInfo().fileName) : "视频流";
             liveMonitorPage->updateLiveFrame(name, origin, processed, pts);
         });
 
-        // 任务结束或队列空闲重置视口
+        // 任务结束保留画面并展示完成态
         QObject::connect(&manager, &TranscodeTaskManager::allTasksCompleted, [this]() {
-            liveMonitorPage->resetToIdle();
+            liveMonitorPage->showCompletedState();
         });
 
         // 实时去水印参数双向同步
@@ -264,8 +268,22 @@ public:
         }
 #endif
         int taskCount = manager.allTasks().size();
-        QString perfStr = QString("FFmpeg Transcoder Pro  |  RAM %1 MB  |  任务队列: %2  |  工作台已就绪")
-            .arg(ramMB).arg(taskCount);
+        int runningCount = 0;
+        int pendingCount = 0;
+        for (auto *t : manager.allTasks()) {
+            if (t->state() == TaskState::Converting) runningCount++;
+            else if (t->state() == TaskState::Pending) pendingCount++;
+        }
+        QString stateStr = "工作台就绪";
+        if (runningCount > 0) {
+            stateStr = QString("正在转码 (%1 活跃)").arg(runningCount);
+        } else if (pendingCount > 0) {
+            stateStr = QString("%1 个任务待命 (可点击开始转码)").arg(pendingCount);
+        } else if (!manager.allTasks().isEmpty()) {
+            stateStr = "转码已完成";
+        }
+        QString perfStr = QString("FFmpeg Transcoder Pro  |  RAM %1 MB  |  任务队列: %2  |  %3")
+            .arg(ramMB).arg(taskCount).arg(stateStr);
         perfInfoLabel->setText(perfStr);
     }
 };
