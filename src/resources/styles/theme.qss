@@ -1077,47 +1077,6 @@ QSplitter::handle:hover {
     border-color: #38bdf8;
 }
 
-#btnLiveStart {
-    background-color: #059669;
-    color: #ffffff;
-    border: 1px solid #10b981;
-    border-radius: 6px;
-    padding: 6px 14px;
-    font-size: 12px;
-    font-weight: 700;
-}
-
-#btnLiveStart:hover {
-    background-color: #047857;
-    border-color: #34d399;
-}
-
-#btnLiveStart:disabled {
-    background-color: #1e293b;
-    border-color: #334155;
-    color: #64748b;
-}
-
-#btnLivePause {
-    background-color: #b45309;
-    color: #ffffff;
-    border: 1px solid #d97706;
-    border-radius: 6px;
-    padding: 6px 14px;
-    font-size: 12px;
-    font-weight: 600;
-}
-
-#btnLivePause:hover {
-    background-color: #92400e;
-    border-color: #f59e0b;
-}
-
-#btnLivePause:disabled {
-    background-color: #1e293b;
-    border-color: #334155;
-    color: #64748b;
-}
 
 #liveTaskCombo {
     background-color: #14161d;

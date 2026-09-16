@@ -31,9 +31,6 @@ public:
     QLabel *titleLabel{nullptr};
     QLabel *taskNameLabel{nullptr};
 
-    QPushButton *startBtn{nullptr};
-    QPushButton *pauseBtn{nullptr};
-
     VideoCompareWidget *viewport{nullptr};
 
     // 底部工具与检视任务选择
@@ -235,16 +232,6 @@ public:
         headerLayout->addLayout(titleBox);
 
         headerLayout->addStretch();
-
-        // 转码控制按钮组
-        startBtn = new QPushButton("开始转码检视", q_ptr);
-        startBtn->setObjectName("btnLiveStart");
-        headerLayout->addWidget(startBtn);
-
-        pauseBtn = new QPushButton("暂停", q_ptr);
-        pauseBtn->setObjectName("btnLivePause");
-        pauseBtn->setEnabled(false);
-        headerLayout->addWidget(pauseBtn);
 
         mainLayout->addLayout(headerLayout);
 
@@ -575,29 +562,6 @@ public:
             }
         });
 
-        // 开始转码检视
-        QObject::connect(startBtn, &QPushButton::clicked, [this]() {
-            if (manager) {
-                manager->startAll();
-                updateRunningState();
-            }
-        });
-
-        // 暂停 / 恢复转码
-        QObject::connect(pauseBtn, &QPushButton::clicked, [this]() {
-            if (!manager) return;
-            bool anyRunning = false;
-            for (auto *t : manager->allTasks()) {
-                if (t->state() == TaskState::Converting) { anyRunning = true; break; }
-            }
-            if (anyRunning) {
-                manager->pauseAll();
-            } else {
-                manager->resumeAll();
-            }
-            updateRunningState();
-        });
-
         // 水印参数联动
         auto emitWatermark = [this]() {
             WatermarkConfig cfg;
@@ -686,35 +650,7 @@ public:
     }
 
     void updateRunningState() {
-        if (!manager) return;
-        bool anyRunning = false;
-        bool anyPaused = false;
-        bool anyPending = false;
-        for (auto *t : manager->allTasks()) {
-            if (t->state() == TaskState::Converting) anyRunning = true;
-            else if (t->state() == TaskState::Paused) anyPaused = true;
-            else if (t->state() == TaskState::Pending) anyPending = true;
-        }
-
-        if (anyRunning) {
-            startBtn->setText("正在转码中...");
-            startBtn->setEnabled(false);
-            pauseBtn->setText("暂停");
-            pauseBtn->setEnabled(true);
-        } else if (anyPaused) {
-            startBtn->setText("恢复转码");
-            startBtn->setEnabled(true);
-            pauseBtn->setText("恢复");
-            pauseBtn->setEnabled(true);
-        } else if (anyPending) {
-            startBtn->setText("开始转码检视");
-            startBtn->setEnabled(true);
-            pauseBtn->setEnabled(false);
-        } else {
-            startBtn->setText(manager->allTasks().isEmpty() ? "队列无任务" : "重新转码");
-            startBtn->setEnabled(!manager->allTasks().isEmpty());
-            pauseBtn->setEnabled(false);
-        }
+        // 顶部控制按钮已按需移除，保留函数以兼容外部状态刷新调用
     }
 };
 
