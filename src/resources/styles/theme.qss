@@ -947,6 +947,67 @@ QSplitter::handle:hover {
     background-color: #14161d;
 }
 
+/* 实时双分屏检视页 - 右侧队列视频列表面板 */
+#liveRightPanel {
+    background-color: #181b24;
+    border: 1px solid #282e3e;
+    border-radius: 8px;
+}
+
+#liveListHeader {
+    font-size: 13px;
+    font-weight: 700;
+    color: #f1f5f9;
+}
+
+#liveListBadge {
+    font-size: 11px;
+    font-weight: 600;
+    color: #38bdf8;
+    background-color: #14161d;
+    border: 1px solid #282e3e;
+    border-radius: 10px;
+    padding: 2px 8px;
+}
+
+#liveVideoList {
+    background-color: #14161d;
+    border: 1px solid #242834;
+    border-radius: 6px;
+    padding: 4px;
+    outline: none;
+}
+
+#liveVideoList::item {
+    background-color: #1a1e28;
+    color: #e2e8f0;
+    border: 1px solid #232836;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    font-size: 13px;
+}
+
+#liveVideoList::item:hover {
+    background-color: #22293a;
+    border-color: #38bdf8;
+    color: #ffffff;
+}
+
+#liveVideoList::item:selected {
+    background-color: #1e3a5f;
+    border: 1px solid #38bdf8;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+#liveEmptyLabel {
+    color: #64748b;
+    font-size: 12px;
+    background-color: transparent;
+    padding: 16px;
+}
+
 #liveMonitorTitle {
     font-size: 16px;
     font-weight: 700;

@@ -74,9 +74,13 @@ static void applyDelogoYuv(AVFrame *frame, const DelogoConfig &cfg) {
     }
 }
 
-// 预光栅化水印 ARGB32 位图并计算目标起始位置
-static QImage createWatermarkRaster(const WatermarkConfig &cfg, int frameWidth, int frameHeight, QPoint &outPos) {
+// 预光栅化水印 ARGB32 位图并计算目标起始位置 (支持基于源分辨率与输出分辨率的等比自适应缩放)
+static QImage createWatermarkRaster(const WatermarkConfig &cfg, int frameWidth, int frameHeight, int origWidth, int origHeight, QPoint &outPos) {
     if (!cfg.enabled || frameWidth <= 0 || frameHeight <= 0) return {};
+
+    float scaleX = (origWidth > 0) ? (static_cast<float>(frameWidth) / static_cast<float>(origWidth)) : 1.0f;
+    float scaleY = (origHeight > 0) ? (static_cast<float>(frameHeight) / static_cast<float>(origHeight)) : 1.0f;
+    float scaleRatio = scaleX;
 
     QImage wm;
     if (cfg.type == WatermarkType::Image) {
@@ -84,18 +88,23 @@ static QImage createWatermarkRaster(const WatermarkConfig &cfg, int frameWidth, 
         wm.load(cfg.imagePath);
         if (wm.isNull()) return {};
 
-        if (std::abs(cfg.scale - 1.0f) > 0.01f && cfg.scale > 0.05f) {
-            int nw = std::clamp(static_cast<int>(wm.width() * cfg.scale), 10, frameWidth);
-            int nh = std::clamp(static_cast<int>(wm.height() * cfg.scale), 10, frameHeight);
+        float effScale = cfg.scale * scaleRatio;
+        if (std::abs(effScale - 1.0f) > 0.01f && effScale > 0.01f) {
+            int nw = std::clamp(static_cast<int>(wm.width() * effScale), 10, frameWidth);
+            int nh = std::clamp(static_cast<int>(wm.height() * effScale), 10, frameHeight);
             wm = wm.scaled(nw, nh, Qt::KeepAspectRatio, Qt::SmoothTransformation);
         }
     } else {
         if (cfg.text.isEmpty()) return {};
-        QFont font("Segoe UI", std::clamp(cfg.fontSize, 10, 120), QFont::Bold);
+        int effFontSize = std::clamp(static_cast<int>(std::round(cfg.fontSize * scaleRatio)), 8, std::max(10, frameHeight / 2));
+        QFont font("Segoe UI");
+        font.setPixelSize(effFontSize);
+        font.setBold(true);
+
         QFontMetrics fm(font);
         QRect textRect = fm.boundingRect(cfg.text);
-        int padH = 8;
-        int padV = 4;
+        int padH = std::max(2, static_cast<int>(std::round(8.0f * scaleRatio)));
+        int padV = std::max(2, static_cast<int>(std::round(4.0f * scaleRatio)));
         int w = textRect.width() + padH * 2;
         int h = textRect.height() + padV * 2;
 
@@ -108,7 +117,8 @@ static QImage createWatermarkRaster(const WatermarkConfig &cfg, int frameWidth, 
 
         p.setBrush(QColor(15, 23, 42, 160));
         p.setPen(Qt::NoPen);
-        p.drawRoundedRect(0, 0, w, h, 4, 4);
+        int radius = std::max(2, static_cast<int>(std::round(4.0f * scaleRatio)));
+        p.drawRoundedRect(0, 0, w, h, radius, radius);
 
         QColor textCol(cfg.fontColor);
         if (!textCol.isValid()) textCol = Qt::white;
@@ -120,33 +130,36 @@ static QImage createWatermarkRaster(const WatermarkConfig &cfg, int frameWidth, 
     if (wm.isNull() || wm.width() <= 0 || wm.height() <= 0) return {};
     wm = wm.convertToFormat(QImage::Format_ARGB32);
 
-    int targetX = cfg.x;
-    int targetY = cfg.y;
+    int effX = static_cast<int>(std::round(cfg.x * scaleX));
+    int effY = static_cast<int>(std::round(cfg.y * scaleY));
+
+    int targetX = effX;
+    int targetY = effY;
 
     switch (cfg.position) {
     case WatermarkPosition::TopRight:
-        targetX = frameWidth - wm.width() - cfg.x;
-        targetY = cfg.y;
+        targetX = frameWidth - wm.width() - effX;
+        targetY = effY;
         break;
     case WatermarkPosition::TopLeft:
-        targetX = cfg.x;
-        targetY = cfg.y;
+        targetX = effX;
+        targetY = effY;
         break;
     case WatermarkPosition::BottomRight:
-        targetX = frameWidth - wm.width() - cfg.x;
-        targetY = frameHeight - wm.height() - cfg.y;
+        targetX = frameWidth - wm.width() - effX;
+        targetY = frameHeight - wm.height() - effY;
         break;
     case WatermarkPosition::BottomLeft:
-        targetX = cfg.x;
-        targetY = frameHeight - wm.height() - cfg.y;
+        targetX = effX;
+        targetY = frameHeight - wm.height() - effY;
         break;
     case WatermarkPosition::Center:
         targetX = (frameWidth - wm.width()) / 2;
         targetY = (frameHeight - wm.height()) / 2;
         break;
     case WatermarkPosition::Custom:
-        targetX = cfg.x;
-        targetY = cfg.y;
+        targetX = effX;
+        targetY = effY;
         break;
     }
 
@@ -648,7 +661,7 @@ public:
         QPoint wmPos;
         QImage wmRaster;
         if (transcodeVideo && cfg.watermark.enabled) {
-            wmRaster = createWatermarkRaster(cfg.watermark, outVideoCodecCtx->width, outVideoCodecCtx->height, wmPos);
+            wmRaster = createWatermarkRaster(cfg.watermark, outVideoCodecCtx->width, outVideoCodecCtx->height, inVideoCodecCtx->width, inVideoCodecCtx->height, wmPos);
         }
 
         // 5. 核心转码处理循环
@@ -691,7 +704,16 @@ public:
 
                             // 内存级图像算法：动态实时去水印与区域平滑
                             if (cfg.delogo.enabled) {
-                                applyDelogoYuv(scaledVideoFrame.get(), cfg.delogo);
+                                DelogoConfig effDelogo = cfg.delogo;
+                                if (inVideoCodecCtx->width > 0 && inVideoCodecCtx->height > 0) {
+                                    float sx = static_cast<float>(outVideoCodecCtx->width) / inVideoCodecCtx->width;
+                                    float sy = static_cast<float>(outVideoCodecCtx->height) / inVideoCodecCtx->height;
+                                    effDelogo.x = static_cast<int>(std::round(effDelogo.x * sx));
+                                    effDelogo.y = static_cast<int>(std::round(effDelogo.y * sy));
+                                    effDelogo.width = static_cast<int>(std::round(effDelogo.width * sx));
+                                    effDelogo.height = static_cast<int>(std::round(effDelogo.height * sy));
+                                }
+                                applyDelogoYuv(scaledVideoFrame.get(), effDelogo);
                             }
 
                             // 内存级图像算法：自定义水印透明度 Alpha Blending 融合

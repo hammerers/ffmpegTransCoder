@@ -17,6 +17,7 @@
 #include <QFileDialog>
 #include <QFrame>
 #include <QFileInfo>
+#include <QListWidget>
 #include <algorithm>
 
 namespace ffmpeg_transform {
@@ -62,6 +63,155 @@ public:
     QSpinBox *spinW{nullptr};
     QSpinBox *spinH{nullptr};
 
+    // 右侧垂直队列面板
+    QWidget *rightPanel{nullptr};
+    QLabel *rightHeaderTitle{nullptr};
+    QLabel *rightBadgeLabel{nullptr};
+    QListWidget *videoListWidget{nullptr};
+    QLabel *emptyListHint{nullptr};
+
+    void connectTaskSignals(TranscodeTask *task) {
+        if (!task) return;
+        QObject::connect(task, &TranscodeTask::mediaInfoLoaded, q_ptr, [this, task](const MediaInfo &) {
+            updateTaskItem(task);
+        });
+        QObject::connect(task, &TranscodeTask::thumbnailLoaded, q_ptr, [this, task](const QImage &img) {
+            if (currentTaskId == task->id() && !viewport->hasFrames()) {
+                viewport->setStaticPreview(img, QFileInfo(task->inputFilePath()).fileName());
+            }
+        });
+        QObject::connect(task, &TranscodeTask::progressChanged, q_ptr, [this, task](const TranscodeProgress &) {
+            updateTaskItem(task);
+        });
+        QObject::connect(task, &TranscodeTask::stateChanged, q_ptr, [this, task](TaskState) {
+            updateTaskItem(task);
+            updateRunningState();
+        });
+    }
+
+    void updateTaskItem(TranscodeTask *task) {
+        if (!task || !videoListWidget) return;
+        for (int i = 0; i < videoListWidget->count(); ++i) {
+            auto *item = videoListWidget->item(i);
+            if (item && item->data(Qt::UserRole).toString() == task->id()) {
+                QString name = QFileInfo(task->inputFilePath()).fileName();
+                QString stateStr;
+                switch (task->state()) {
+                case TaskState::Pending:    stateStr = "待命调参"; break;
+                case TaskState::Converting: stateStr = QString("压制中 %1%").arg(static_cast<int>(task->progress().percent)); break;
+                case TaskState::Paused:     stateStr = "已暂停"; break;
+                case TaskState::Completed:  stateStr = "已完成"; break;
+                case TaskState::Failed:     stateStr = "失败"; break;
+                case TaskState::Canceled:   stateStr = "已取消"; break;
+                default:                    stateStr = "就绪"; break;
+                }
+                QString sub;
+                if (task->mediaInfo().durationSec > 0.0) {
+                    sub = QString("%1 | %2 | %3")
+                        .arg(task->mediaInfo().formattedDuration())
+                        .arg(task->mediaInfo().resolutionString())
+                        .arg(stateStr);
+                } else {
+                    sub = QString("元数据解析中... | %1").arg(stateStr);
+                }
+                item->setText(name + "\n" + sub);
+                break;
+            }
+        }
+    }
+
+    void refreshVideoList() {
+        if (!manager || !videoListWidget) return;
+        const auto &tasks = manager->allTasks();
+        rightBadgeLabel->setText(QString("%1 个视频").arg(tasks.size()));
+
+        if (tasks.isEmpty()) {
+            videoListWidget->blockSignals(true);
+            videoListWidget->clear();
+            videoListWidget->blockSignals(false);
+            videoListWidget->setVisible(false);
+            emptyListHint->setVisible(true);
+            return;
+        }
+
+        videoListWidget->setVisible(true);
+        emptyListHint->setVisible(false);
+
+        videoListWidget->blockSignals(true);
+        videoListWidget->clear();
+
+        QListWidgetItem *toSelect = nullptr;
+        for (auto *task : tasks) {
+            auto *item = new QListWidgetItem();
+            QString name = QFileInfo(task->inputFilePath()).fileName();
+            QString stateStr;
+            switch (task->state()) {
+            case TaskState::Pending:    stateStr = "待命调参"; break;
+            case TaskState::Converting: stateStr = QString("压制中 %1%").arg(static_cast<int>(task->progress().percent)); break;
+            case TaskState::Paused:     stateStr = "已暂停"; break;
+            case TaskState::Completed:  stateStr = "已完成"; break;
+            case TaskState::Failed:     stateStr = "失败"; break;
+            case TaskState::Canceled:   stateStr = "已取消"; break;
+            default:                    stateStr = "就绪"; break;
+            }
+            QString sub;
+            if (task->mediaInfo().durationSec > 0.0) {
+                sub = QString("%1 | %2 | %3")
+                    .arg(task->mediaInfo().formattedDuration())
+                    .arg(task->mediaInfo().resolutionString())
+                    .arg(stateStr);
+            } else {
+                sub = QString("元数据解析中... | %1").arg(stateStr);
+            }
+            item->setText(name + "\n" + sub);
+            item->setData(Qt::UserRole, task->id());
+            item->setToolTip(task->inputFilePath());
+            videoListWidget->addItem(item);
+
+            if (task->id() == currentTaskId) {
+                toSelect = item;
+            }
+        }
+        videoListWidget->blockSignals(false);
+
+        if (!toSelect && videoListWidget->count() > 0) {
+            toSelect = videoListWidget->item(0);
+        }
+        if (toSelect && videoListWidget->currentItem() != toSelect) {
+            videoListWidget->blockSignals(true);
+            videoListWidget->setCurrentItem(toSelect);
+            videoListWidget->blockSignals(false);
+        }
+    }
+
+    void refreshTaskCombo() {
+        if (!manager || !taskCombo) return;
+        QString prevId = currentTaskId;
+        taskCombo->blockSignals(true);
+        taskCombo->clear();
+        int restoreIdx = -1;
+        int i = 0;
+        for (auto *t : manager->allTasks()) {
+            QString name = QFileInfo(t->inputFilePath()).fileName();
+            QString stateStr;
+            if (t->state() == TaskState::Converting) stateStr = "转码中";
+            else if (t->state() == TaskState::Completed) stateStr = "已完成";
+            else if (t->state() == TaskState::Paused) stateStr = "已暂停";
+            else stateStr = "待命中";
+            taskCombo->addItem(QString("%1 (%2)").arg(name).arg(stateStr), t->id());
+            if (t->id() == prevId) {
+                restoreIdx = i;
+            }
+            i++;
+        }
+        if (restoreIdx >= 0) {
+            taskCombo->setCurrentIndex(restoreIdx);
+        } else if (taskCombo->count() > 0) {
+            taskCombo->setCurrentIndex(0);
+        }
+        taskCombo->blockSignals(false);
+    }
+
     void initUI() {
         q_ptr->setObjectName("liveMonitorPage");
 
@@ -98,13 +248,22 @@ public:
 
         mainLayout->addLayout(headerLayout);
 
-        // 2. 中央双分屏视口 (仅保留左右并排)
-        viewport = new VideoCompareWidget(q_ptr);
+        // 2. 中央主体工作区 (水平分割：左侧视口+调参栏，右侧队列列表)
+        auto *centerLayout = new QHBoxLayout();
+        centerLayout->setSpacing(14);
+
+        // 左侧工作区 (视口 + 底部调参卡片)
+        auto *leftArea = new QWidget(q_ptr);
+        auto *leftLayout = new QVBoxLayout(leftArea);
+        leftLayout->setContentsMargins(0, 0, 0, 0);
+        leftLayout->setSpacing(12);
+
+        viewport = new VideoCompareWidget(leftArea);
         viewport->setCompareMode(CompareMode::SideBySide);
-        mainLayout->addWidget(viewport, 1);
+        leftLayout->addWidget(viewport, 1);
 
         // 3. 底部算法与滤镜参数控制条
-        auto *bottomCard = new QFrame(q_ptr);
+        auto *bottomCard = new QFrame(leftArea);
         bottomCard->setObjectName("liveFilterCard");
         auto *bottomLayout = new QVBoxLayout(bottomCard);
         bottomLayout->setContentsMargins(14, 10, 14, 10);
@@ -318,7 +477,51 @@ public:
         scrollArea->setWidget(toolStack);
         bottomLayout->addWidget(scrollArea);
 
-        mainLayout->addWidget(bottomCard);
+        leftLayout->addWidget(bottomCard);
+        centerLayout->addWidget(leftArea, 1);
+
+        // 4. 右侧垂直列表：队列视频清单 (宽度 260px)
+        rightPanel = new QWidget(q_ptr);
+        rightPanel->setObjectName("liveRightPanel");
+        rightPanel->setFixedWidth(260);
+
+        auto *rightLayout = new QVBoxLayout(rightPanel);
+        rightLayout->setContentsMargins(12, 12, 12, 12);
+        rightLayout->setSpacing(10);
+
+        auto *headerRow = new QHBoxLayout();
+        headerRow->setContentsMargins(0, 0, 0, 0);
+        headerRow->setSpacing(8);
+
+        rightHeaderTitle = new QLabel("编码队列列表", rightPanel);
+        rightHeaderTitle->setObjectName("liveListHeader");
+
+        rightBadgeLabel = new QLabel("0 个视频", rightPanel);
+        rightBadgeLabel->setObjectName("liveListBadge");
+
+        headerRow->addWidget(rightHeaderTitle);
+        headerRow->addStretch();
+        headerRow->addWidget(rightBadgeLabel);
+        rightLayout->addLayout(headerRow);
+
+        videoListWidget = new QListWidget(rightPanel);
+        videoListWidget->setObjectName("liveVideoList");
+        videoListWidget->setSelectionMode(QAbstractItemView::SingleSelection);
+        videoListWidget->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+        videoListWidget->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        rightLayout->addWidget(videoListWidget, 1);
+
+        emptyListHint = new QLabel("队列中暂无视频任务\n\n可在【准备文件】页面中\n添加待转码视频", rightPanel);
+        emptyListHint->setObjectName("liveEmptyLabel");
+        emptyListHint->setAlignment(Qt::AlignCenter);
+        emptyListHint->setWordWrap(true);
+        emptyListHint->setVisible(true);
+        videoListWidget->setVisible(false);
+        rightLayout->addWidget(emptyListHint, 1);
+
+        centerLayout->addWidget(rightPanel);
+
+        mainLayout->addLayout(centerLayout, 1);
 
         bindEvents();
     }
@@ -470,6 +673,16 @@ public:
                 emit q_ptr->taskSelected(taskId);
             }
         });
+
+        // 列表选中切换检视任务
+        QObject::connect(videoListWidget, &QListWidget::currentItemChanged, [this](QListWidgetItem *current, QListWidgetItem*) {
+            if (!current) return;
+            QString taskId = current->data(Qt::UserRole).toString();
+            if (!taskId.isEmpty() && taskId != currentTaskId) {
+                q_ptr->selectTask(taskId);
+                emit q_ptr->taskSelected(taskId);
+            }
+        });
     }
 
     void updateRunningState() {
@@ -519,47 +732,41 @@ void LiveMonitorPage::setManager(TranscodeTaskManager *manager) {
     d->manager = manager;
     if (!manager) return;
 
-    auto refreshTaskCombo = [this, d]() {
-        QString prevId = d->currentTaskId;
-        d->taskCombo->blockSignals(true);
-        d->taskCombo->clear();
-        int restoreIdx = -1;
-        int i = 0;
-        for (auto *t : d->manager->allTasks()) {
-            QString name = QFileInfo(t->inputFilePath()).fileName();
-            QString stateStr;
-            if (t->state() == TaskState::Converting) stateStr = "转码中";
-            else if (t->state() == TaskState::Completed) stateStr = "已完成";
-            else if (t->state() == TaskState::Paused) stateStr = "已暂停";
-            else stateStr = "待命中";
-            d->taskCombo->addItem(QString("%1 (%2)").arg(name).arg(stateStr), t->id());
-            if (t->id() == prevId) {
-                restoreIdx = i;
-            }
-            i++;
-        }
-        if (restoreIdx >= 0) {
-            d->taskCombo->setCurrentIndex(restoreIdx);
-        } else if (d->taskCombo->count() > 0) {
-            d->taskCombo->setCurrentIndex(0);
-        }
-        d->taskCombo->blockSignals(false);
+    auto refreshAll = [this, d]() {
+        d->refreshTaskCombo();
+        d->refreshVideoList();
 
-        QString currentSel = d->taskCombo->currentData().toString();
-        if (!currentSel.isEmpty()) {
+        QString currentSel = d->currentTaskId;
+        if ((currentSel.isEmpty() || !d->manager->getTask(currentSel)) && d->videoListWidget && d->videoListWidget->count() > 0) {
+            currentSel = d->videoListWidget->item(0)->data(Qt::UserRole).toString();
+        }
+        if (!currentSel.isEmpty() && d->manager->getTask(currentSel)) {
             selectTask(currentSel);
         } else {
             checkAndLoadPreview();
         }
     };
 
-    QObject::connect(manager, &TranscodeTaskManager::taskAdded, this, refreshTaskCombo);
-    QObject::connect(manager, &TranscodeTaskManager::taskRemoved, this, refreshTaskCombo);
-    QObject::connect(manager, &TranscodeTaskManager::taskStateChanged, this, [d](TranscodeTask *, TaskState) {
+    QObject::connect(manager, &TranscodeTaskManager::taskAdded, this, [this, d, refreshAll](TranscodeTask *t) {
+        d->connectTaskSignals(t);
+        refreshAll();
+    });
+    QObject::connect(manager, &TranscodeTaskManager::taskRemoved, this, [this, d, refreshAll](const QString &id) {
+        if (d->currentTaskId == id) {
+            d->currentTaskId.clear();
+        }
+        refreshAll();
+    });
+    QObject::connect(manager, &TranscodeTaskManager::taskStateChanged, this, [d](TranscodeTask *t, TaskState) {
+        d->updateTaskItem(t);
         d->updateRunningState();
     });
 
-    refreshTaskCombo();
+    for (auto *t : manager->allTasks()) {
+        d->connectTaskSignals(t);
+    }
+
+    refreshAll();
 }
 
 void LiveMonitorPage::selectTask(const QString &taskId) {
@@ -567,12 +774,27 @@ void LiveMonitorPage::selectTask(const QString &taskId) {
     if (taskId.isEmpty() || !d->manager) return;
     d->currentTaskId = taskId;
 
-    // 同步 taskCombo 下拉框当前索引
+    // 1. 同步 taskCombo 下拉框当前索引
     int idx = d->taskCombo->findData(taskId);
     if (idx >= 0 && d->taskCombo->currentIndex() != idx) {
         d->taskCombo->blockSignals(true);
         d->taskCombo->setCurrentIndex(idx);
         d->taskCombo->blockSignals(false);
+    }
+
+    // 2. 同步 videoListWidget 列表高亮项
+    if (d->videoListWidget) {
+        for (int i = 0; i < d->videoListWidget->count(); ++i) {
+            auto *item = d->videoListWidget->item(i);
+            if (item && item->data(Qt::UserRole).toString() == taskId) {
+                if (d->videoListWidget->currentItem() != item) {
+                    d->videoListWidget->blockSignals(true);
+                    d->videoListWidget->setCurrentItem(item);
+                    d->videoListWidget->blockSignals(false);
+                }
+                break;
+            }
+        }
     }
 
     auto *task = d->manager->getTask(taskId);

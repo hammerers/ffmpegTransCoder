@@ -56,7 +56,9 @@ public:
             wmHeight = std::max(10, static_cast<int>(img.height() * s));
         } else {
             if (watermarkConfig.text.isEmpty()) return QRect();
-            QFont font("Segoe UI", std::clamp(watermarkConfig.fontSize, 10, 120), QFont::Bold);
+            QFont font("Segoe UI");
+            font.setPixelSize(std::clamp(watermarkConfig.fontSize, 10, 200));
+            font.setBold(true);
             QFontMetrics fm(font);
             QRect textRect = fm.boundingRect(watermarkConfig.text);
             wmWidth = textRect.width() + 16;
@@ -212,7 +214,9 @@ public:
                     p.drawImage(tx, ty, scaledImg);
                 }
             } else if (watermarkConfig.type == WatermarkType::Text && !watermarkConfig.text.isEmpty()) {
-                QFont font("Segoe UI", std::clamp(watermarkConfig.fontSize, 10, 120), QFont::Bold);
+                QFont font("Segoe UI");
+                font.setPixelSize(std::clamp(watermarkConfig.fontSize, 10, 200));
+                font.setBold(true);
                 QFontMetrics fm(font);
                 QRect textRect = fm.boundingRect(watermarkConfig.text);
                 int padH = 8;
