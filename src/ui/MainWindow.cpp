@@ -52,8 +52,8 @@ public:
     void initUI() {
         q_ptr->setObjectName("mainWindow");
         q_ptr->setWindowTitle("FFmpeg Transcoder Pro - 高性能音视频转码工作台");
-        q_ptr->resize(1200, 780);
-        q_ptr->setMinimumSize(1000, 650);
+        q_ptr->resize(1240, 780);
+        q_ptr->setMinimumSize(1120, 680);
         q_ptr->setAcceptDrops(true);
 
         auto *centralWidget = new QWidget(q_ptr);

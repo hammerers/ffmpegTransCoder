@@ -13,6 +13,7 @@
 #include <QLineEdit>
 #include <QComboBox>
 #include <QStackedWidget>
+#include <QScrollArea>
 #include <QFileDialog>
 #include <QFrame>
 #include <QFileInfo>
@@ -29,11 +30,6 @@ public:
     QLabel *titleLabel{nullptr};
     QLabel *taskNameLabel{nullptr};
     QLabel *hwBadgeLabel{nullptr};
-
-    QButtonGroup *modeGroup{nullptr};
-    QPushButton *sideBySideBtn{nullptr};
-    QPushButton *curtainBtn{nullptr};
-    QPushButton *processedBtn{nullptr};
 
     QPushButton *startBtn{nullptr};
     QPushButton *pauseBtn{nullptr};
@@ -96,30 +92,6 @@ public:
         hwBadgeLabel->setObjectName("liveHwBadge");
         headerLayout->addWidget(hwBadgeLabel);
 
-        // 视口分屏模式按钮组
-        modeGroup = new QButtonGroup(q_ptr);
-        modeGroup->setExclusive(true);
-
-        sideBySideBtn = new QPushButton("左右并排", q_ptr);
-        sideBySideBtn->setObjectName("btnCompareModeSide");
-        sideBySideBtn->setCheckable(true);
-        sideBySideBtn->setChecked(true);
-        modeGroup->addButton(sideBySideBtn, 0);
-
-        curtainBtn = new QPushButton("卷帘分屏", q_ptr);
-        curtainBtn->setObjectName("btnCompareModeCurtain");
-        curtainBtn->setCheckable(true);
-        modeGroup->addButton(curtainBtn, 1);
-
-        processedBtn = new QPushButton("成品画面", q_ptr);
-        processedBtn->setObjectName("btnCompareModeProcessed");
-        processedBtn->setCheckable(true);
-        modeGroup->addButton(processedBtn, 2);
-
-        headerLayout->addWidget(sideBySideBtn);
-        headerLayout->addWidget(curtainBtn);
-        headerLayout->addWidget(processedBtn);
-
         // 转码控制按钮组
         startBtn = new QPushButton("开始转码检视", q_ptr);
         startBtn->setObjectName("btnLiveStart");
@@ -132,8 +104,9 @@ public:
 
         mainLayout->addLayout(headerLayout);
 
-        // 2. 中央双分屏视口
+        // 2. 中央双分屏视口 (仅保留左右并排)
         viewport = new VideoCompareWidget(q_ptr);
+        viewport->setCompareMode(CompareMode::SideBySide);
         mainLayout->addWidget(viewport, 1);
 
         // 3. 底部算法与滤镜参数控制条
@@ -153,7 +126,8 @@ public:
 
         taskCombo = new QComboBox(bottomCard);
         taskCombo->setObjectName("liveTaskCombo");
-        taskCombo->setMinimumWidth(180);
+        taskCombo->setMinimumWidth(160);
+        taskCombo->setMaximumWidth(240);
         selectorRow->addWidget(taskCombo);
 
         auto *tabGroup = new QButtonGroup(bottomCard);
@@ -174,7 +148,7 @@ public:
         selectorRow->addWidget(tabDelogoBtn);
         selectorRow->addStretch();
 
-        auto *hintLabel = new QLabel("提示: 调参后水印与去水印效果即时所见即所得 | 拖拽卷帘竖线同屏对比", bottomCard);
+        auto *hintLabel = new QLabel("提示: 调参即时所见 | 右侧画面支持鼠标直接拖拽水印", bottomCard);
         hintLabel->setObjectName("liveHintLabel");
         selectorRow->addWidget(hintLabel);
 
@@ -187,9 +161,10 @@ public:
         // --- 子面板 0: 自定义水印面板 ---
         auto *wmPage = new QWidget(toolStack);
         wmPage->setObjectName("liveWmPage");
+        wmPage->setMinimumWidth(920);
         auto *wmLayout = new QHBoxLayout(wmPage);
         wmLayout->setContentsMargins(0, 0, 0, 0);
-        wmLayout->setSpacing(8);
+        wmLayout->setSpacing(6);
 
         watermarkCheck = new QCheckBox("启用自定义水印", wmPage);
         watermarkCheck->setObjectName("checkLiveWatermark");
@@ -203,6 +178,7 @@ public:
         wmTypeCombo->setObjectName("liveTypeCombo");
         wmTypeCombo->addItem("文字水印", static_cast<int>(WatermarkType::Text));
         wmTypeCombo->addItem("图片水印", static_cast<int>(WatermarkType::Image));
+        wmTypeCombo->setMaximumWidth(95);
         wmLayout->addWidget(wmTypeCombo);
 
         // 文字水印专属组件
@@ -216,7 +192,8 @@ public:
         wmTextEdit = new QLineEdit("HAMMERERS STUDIO", wmTextWidget);
         wmTextEdit->setObjectName("liveTextEdit");
         wmTextEdit->setPlaceholderText("水印文字");
-        wmTextEdit->setMinimumWidth(150);
+        wmTextEdit->setMinimumWidth(110);
+        wmTextEdit->setMaximumWidth(160);
         textLayout->addWidget(wmTextEdit);
 
         auto *sizeLbl = new QLabel("字号:", wmTextWidget);
@@ -227,6 +204,7 @@ public:
         wmFontSizeSpin->setRange(10, 120);
         wmFontSizeSpin->setValue(28);
         wmFontSizeSpin->setSuffix(" px");
+        wmFontSizeSpin->setMaximumWidth(70);
         textLayout->addWidget(wmFontSizeSpin);
         wmLayout->addWidget(wmTextWidget);
 
@@ -241,10 +219,12 @@ public:
         wmImagePathEdit = new QLineEdit(wmImageWidget);
         wmImagePathEdit->setObjectName("liveImagePathEdit");
         wmImagePathEdit->setPlaceholderText("选择 PNG/JPG 水印文件...");
-        wmImagePathEdit->setMinimumWidth(160);
+        wmImagePathEdit->setMinimumWidth(120);
+        wmImagePathEdit->setMaximumWidth(180);
         imgLayout->addWidget(wmImagePathEdit);
         wmBrowseBtn = new QPushButton("浏览...", wmImageWidget);
         wmBrowseBtn->setObjectName("btnBrowseWatermark");
+        wmBrowseBtn->setMaximumWidth(65);
         imgLayout->addWidget(wmBrowseBtn);
         wmLayout->addWidget(wmImageWidget);
         wmImageWidget->setVisible(false); // 初始文字水印
@@ -261,6 +241,7 @@ public:
         wmPosCombo->addItem("左下角", static_cast<int>(WatermarkPosition::BottomLeft));
         wmPosCombo->addItem("居中", static_cast<int>(WatermarkPosition::Center));
         wmPosCombo->addItem("自定义坐标", static_cast<int>(WatermarkPosition::Custom));
+        wmPosCombo->setMaximumWidth(100);
         wmLayout->addWidget(wmPosCombo);
 
         auto *xLbl = new QLabel("X:", wmPage);
@@ -270,6 +251,7 @@ public:
         wmSpinX->setObjectName("liveSpinBox");
         wmSpinX->setRange(0, 3840);
         wmSpinX->setValue(30);
+        wmSpinX->setMaximumWidth(70);
         wmLayout->addWidget(wmSpinX);
 
         auto *yLbl = new QLabel("Y:", wmPage);
@@ -279,6 +261,7 @@ public:
         wmSpinY->setObjectName("liveSpinBox");
         wmSpinY->setRange(0, 2160);
         wmSpinY->setValue(30);
+        wmSpinY->setMaximumWidth(70);
         wmLayout->addWidget(wmSpinY);
 
         auto *opLbl = new QLabel("透明度:", wmPage);
@@ -289,6 +272,7 @@ public:
         wmOpacitySpin->setRange(0.05, 1.00);
         wmOpacitySpin->setSingleStep(0.05);
         wmOpacitySpin->setValue(0.85);
+        wmOpacitySpin->setMaximumWidth(70);
         wmLayout->addWidget(wmOpacitySpin);
 
         auto *scLbl = new QLabel("缩放:", wmPage);
@@ -300,6 +284,7 @@ public:
         wmScaleSpin->setSingleStep(0.1);
         wmScaleSpin->setValue(1.0);
         wmScaleSpin->setSuffix("x");
+        wmScaleSpin->setMaximumWidth(70);
         wmLayout->addWidget(wmScaleSpin);
 
         wmLayout->addStretch();
@@ -308,6 +293,7 @@ public:
         // --- 子面板 1: 去水印面板 ---
         auto *delogoPage = new QWidget(toolStack);
         delogoPage->setObjectName("liveDelogoPage");
+        delogoPage->setMinimumWidth(800);
         auto *delogoLayout = new QHBoxLayout(delogoPage);
         delogoLayout->setContentsMargins(0, 0, 0, 0);
         delogoLayout->setSpacing(8);
@@ -323,6 +309,7 @@ public:
             spin->setObjectName("liveSpinBox");
             spin->setRange(minV, maxV);
             spin->setValue(initV);
+            spin->setMaximumWidth(70);
             delogoLayout->addWidget(lbl);
             delogoLayout->addWidget(spin);
             return spin;
@@ -340,18 +327,49 @@ public:
         delogoLayout->addStretch();
         toolStack->addWidget(delogoPage);
 
-        bottomLayout->addWidget(toolStack);
+        // 使用 QScrollArea 包裹底部工具栈，确保窗口缩小时选项绝不被截断
+        auto *scrollArea = new QScrollArea(bottomCard);
+        scrollArea->setObjectName("liveToolScrollArea");
+        scrollArea->setWidgetResizable(true);
+        scrollArea->setFrameShape(QFrame::NoFrame);
+        scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        scrollArea->setFixedHeight(46);
+        scrollArea->setWidget(toolStack);
+        bottomLayout->addWidget(scrollArea);
+
         mainLayout->addWidget(bottomCard);
 
         bindEvents();
     }
 
     void bindEvents() {
-        // 模式切换联动
-        QObject::connect(modeGroup, &QButtonGroup::idClicked, [this](int id) {
-            if (id == 0) viewport->setCompareMode(CompareMode::SideBySide);
-            else if (id == 1) viewport->setCompareMode(CompareMode::CurtainSplit);
-            else if (id == 2) viewport->setCompareMode(CompareMode::ProcessedOnly);
+        // 视频画面拖拽水印联动
+        QObject::connect(viewport, &VideoCompareWidget::watermarkConfigChanged, [this](const WatermarkConfig &cfg) {
+            wmSpinX->blockSignals(true);
+            wmSpinY->blockSignals(true);
+            wmPosCombo->blockSignals(true);
+
+            wmSpinX->setValue(cfg.x);
+            wmSpinY->setValue(cfg.y);
+            int cIdx = wmPosCombo->findData(static_cast<int>(WatermarkPosition::Custom));
+            if (cIdx >= 0) {
+                wmPosCombo->setCurrentIndex(cIdx);
+            }
+
+            wmSpinX->blockSignals(false);
+            wmSpinY->blockSignals(false);
+            wmPosCombo->blockSignals(false);
+
+            if (manager) {
+                auto *task = manager->getTask(currentTaskId);
+                if (task) {
+                    TranscodeConfig c = task->config();
+                    c.watermark = cfg;
+                    task->setConfig(c);
+                }
+            }
+            emit q_ptr->watermarkConfigChanged(cfg);
         });
 
         // 底部算法选项卡切换联动
@@ -688,6 +706,17 @@ void LiveMonitorPage::setDelogoConfig(const DelogoConfig &cfg) {
 
 void LiveMonitorPage::setWatermarkConfig(const WatermarkConfig &cfg) {
     Q_D(LiveMonitorPage);
+    d->watermarkCheck->blockSignals(true);
+    d->wmTypeCombo->blockSignals(true);
+    d->wmTextEdit->blockSignals(true);
+    d->wmImagePathEdit->blockSignals(true);
+    d->wmFontSizeSpin->blockSignals(true);
+    d->wmPosCombo->blockSignals(true);
+    d->wmSpinX->blockSignals(true);
+    d->wmSpinY->blockSignals(true);
+    d->wmOpacitySpin->blockSignals(true);
+    d->wmScaleSpin->blockSignals(true);
+
     d->watermarkCheck->setChecked(cfg.enabled);
     int tIdx = d->wmTypeCombo->findData(static_cast<int>(cfg.type));
     if (tIdx >= 0) {
@@ -704,6 +733,18 @@ void LiveMonitorPage::setWatermarkConfig(const WatermarkConfig &cfg) {
     d->wmSpinY->setValue(cfg.y);
     if (cfg.opacity > 0.0f) d->wmOpacitySpin->setValue(cfg.opacity);
     if (cfg.scale > 0.0f) d->wmScaleSpin->setValue(cfg.scale);
+
+    d->watermarkCheck->blockSignals(false);
+    d->wmTypeCombo->blockSignals(false);
+    d->wmTextEdit->blockSignals(false);
+    d->wmImagePathEdit->blockSignals(false);
+    d->wmFontSizeSpin->blockSignals(false);
+    d->wmPosCombo->blockSignals(false);
+    d->wmSpinX->blockSignals(false);
+    d->wmSpinY->blockSignals(false);
+    d->wmOpacitySpin->blockSignals(false);
+    d->wmScaleSpin->blockSignals(false);
+
     d->viewport->setWatermarkConfig(cfg);
 }
 

@@ -1200,3 +1200,31 @@ QSplitter::handle:hover {
     font-size: 11px;
     font-style: italic;
 }
+
+#liveToolScrollArea {
+    background-color: transparent;
+    border: none;
+}
+
+#liveToolScrollArea QScrollBar:horizontal {
+    height: 6px;
+    background: #14161d;
+    margin: 0px;
+    border-radius: 3px;
+}
+
+#liveToolScrollArea QScrollBar::handle:horizontal {
+    background: #333a4c;
+    min-width: 24px;
+    border-radius: 3px;
+}
+
+#liveToolScrollArea QScrollBar::handle:horizontal:hover {
+    background: #38bdf8;
+}
+
+#liveToolScrollArea QScrollBar::add-line:horizontal,
+#liveToolScrollArea QScrollBar::sub-line:horizontal {
+    width: 0px;
+    height: 0px;
+}
