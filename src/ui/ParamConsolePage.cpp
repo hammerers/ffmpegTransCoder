@@ -20,6 +20,7 @@ namespace ffmpeg_transform {
 class ParamConsolePagePrivate {
 public:
     ParamConsolePage *q_ptr{nullptr};
+    TranscodeConfig cachedConfig;
 
     // 二级导航控件
     QWidget *subSidebar{nullptr};
@@ -543,7 +544,7 @@ ParamConsolePage::~ParamConsolePage() = default;
 
 TranscodeConfig ParamConsolePage::config() const {
     Q_D(const ParamConsolePage);
-    TranscodeConfig cfg;
+    TranscodeConfig cfg = d->cachedConfig;
 
     cfg.containerFormat = d->formatCombo->currentData().toString();
     int catIdx = d->encoderCategoryCombo->currentIndex();
@@ -570,6 +571,8 @@ TranscodeConfig ParamConsolePage::config() const {
 
 void ParamConsolePage::setConfig(const TranscodeConfig &cfg) {
     Q_D(ParamConsolePage);
+    d->cachedConfig = cfg;
+
     if (cfg.hwAccel == HwAccelMode::NVENC) d->encoderTypeCombo->setCurrentIndex(1);
     else if (cfg.hwAccel == HwAccelMode::QSV) d->encoderTypeCombo->setCurrentIndex(2);
     else d->encoderTypeCombo->setCurrentIndex(0);
@@ -640,6 +643,29 @@ QString ParamConsolePage::generateEquivalentArgs() const {
         else if (fps == FpsOption::Fps24) args << "-r" << "24";
 
         args << "-pix_fmt" << "yuv420p";
+
+        QStringList vfilters;
+        if (d->cachedConfig.delogo.enabled) {
+            vfilters << QString("delogo=x=%1:y=%2:w=%3:h=%4")
+                            .arg(d->cachedConfig.delogo.x)
+                            .arg(d->cachedConfig.delogo.y)
+                            .arg(d->cachedConfig.delogo.width)
+                            .arg(d->cachedConfig.delogo.height);
+        }
+        if (d->cachedConfig.watermark.enabled) {
+            if (d->cachedConfig.watermark.type == WatermarkType::Image && !d->cachedConfig.watermark.imagePath.isEmpty()) {
+                vfilters << QString("overlay=x=%1:y=%2").arg(d->cachedConfig.watermark.x).arg(d->cachedConfig.watermark.y);
+            } else if (d->cachedConfig.watermark.type == WatermarkType::Text && !d->cachedConfig.watermark.text.isEmpty()) {
+                vfilters << QString("drawtext=text='%1':x=%2:y=%3:fontsize=%4")
+                                .arg(d->cachedConfig.watermark.text)
+                                .arg(d->cachedConfig.watermark.x)
+                                .arg(d->cachedConfig.watermark.y)
+                                .arg(d->cachedConfig.watermark.fontSize);
+            }
+        }
+        if (!vfilters.isEmpty()) {
+            args << "-vf" << QString("\"%1\"").arg(vfilters.join(","));
+        }
     }
 
     auto acodec = static_cast<AudioCodecType>(d->audioCodecCombo->currentData().toInt());

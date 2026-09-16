@@ -1104,3 +1104,99 @@ QSplitter::handle:hover {
     selection-background-color: #0369a1;
     selection-color: #ffffff;
 }
+
+#liveTabWatermark, #liveTabDelogo {
+    background-color: #222632;
+    color: #94a3b8;
+    border: 1px solid #333a4c;
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+#liveTabWatermark:hover, #liveTabDelogo:hover {
+    background-color: #2a3040;
+    border-color: #475569;
+    color: #ffffff;
+}
+
+#liveTabWatermark:checked, #liveTabDelogo:checked {
+    background-color: #0369a1;
+    border: 1px solid #38bdf8;
+    color: #ffffff;
+}
+
+#checkLiveWatermark {
+    color: #e2e8f0;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+#liveTypeCombo, #livePosCombo {
+    background-color: #14161d;
+    border: 1px solid #333a4c;
+    border-radius: 4px;
+    color: #e2e8f0;
+    padding: 3px 8px;
+    font-size: 12px;
+}
+
+#liveTypeCombo:hover, #livePosCombo:hover {
+    border-color: #38bdf8;
+}
+
+#liveTypeCombo QAbstractItemView, #livePosCombo QAbstractItemView {
+    background-color: #1a1e28;
+    color: #e2e8f0;
+    border: 1px solid #333a4c;
+    selection-background-color: #0369a1;
+    selection-color: #ffffff;
+}
+
+#liveTextEdit, #liveImagePathEdit {
+    background-color: #14161d;
+    border: 1px solid #333a4c;
+    border-radius: 4px;
+    color: #e2e8f0;
+    padding: 3px 8px;
+    font-size: 12px;
+}
+
+#liveTextEdit:focus, #liveImagePathEdit:focus {
+    border-color: #38bdf8;
+}
+
+#btnBrowseWatermark {
+    background-color: #222632;
+    color: #94a3b8;
+    border: 1px solid #333a4c;
+    border-radius: 4px;
+    padding: 3px 10px;
+    font-size: 12px;
+}
+
+#btnBrowseWatermark:hover {
+    background-color: #2a3040;
+    border-color: #38bdf8;
+    color: #ffffff;
+}
+
+#liveDoubleSpinBox {
+    background-color: #14161d;
+    border: 1px solid #333a4c;
+    border-radius: 4px;
+    color: #e2e8f0;
+    padding: 2px 6px;
+    min-width: 60px;
+}
+
+#liveDoubleSpinBox:focus {
+    border-color: #38bdf8;
+}
+
+#liveAlgoLabel {
+    color: #64748b;
+    font-size: 11px;
+    font-style: italic;
+}

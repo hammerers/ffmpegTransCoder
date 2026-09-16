@@ -150,6 +150,13 @@ public:
             paramPage->setConfig(c);
         });
 
+        // 实时自定义水印参数双向同步
+        QObject::connect(liveMonitorPage, &LiveMonitorPage::watermarkConfigChanged, [this](const WatermarkConfig &cfg) {
+            TranscodeConfig c = paramPage->config();
+            c.watermark = cfg;
+            paramPage->setConfig(c);
+        });
+
         // 起始页快捷跳转
         QObject::connect(homePage, &HomePage::navigateToQueue, [this]() {
             navSidebar->setCurrentIndex(1);
@@ -194,6 +201,8 @@ public:
             auto *t = manager.getTask(id);
             if (t) {
                 paramPage->setConfig(t->config());
+                liveMonitorPage->setDelogoConfig(t->config().delogo);
+                liveMonitorPage->setWatermarkConfig(t->config().watermark);
             }
         });
 
@@ -203,6 +212,8 @@ public:
             auto *t = manager.getTask(id);
             if (t) {
                 paramPage->setConfig(t->config());
+                liveMonitorPage->setDelogoConfig(t->config().delogo);
+                liveMonitorPage->setWatermarkConfig(t->config().watermark);
             }
         });
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/CommonTypes.h"
 #include <QWidget>
 #include <QImage>
 #include <memory>
@@ -35,6 +36,7 @@ public:
     void setSplitPosition(float pos);
 
     void setDelogoHighlight(bool enabled, const QRect &rect);
+    void setWatermarkConfig(const WatermarkConfig &cfg);
     bool hasFrames() const;
 
 public slots:

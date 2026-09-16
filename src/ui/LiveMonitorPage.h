@@ -21,6 +21,7 @@ public:
 
     void setManager(TranscodeTaskManager *manager);
     DelogoConfig delogoConfig() const;
+    WatermarkConfig watermarkConfig() const;
     void checkAndLoadPreview();
 
 public slots:
@@ -29,9 +30,11 @@ public slots:
     void resetToIdle();
     void showCompletedState();
     void setDelogoConfig(const DelogoConfig &cfg);
+    void setWatermarkConfig(const WatermarkConfig &cfg);
 
 signals:
     void delogoConfigChanged(const DelogoConfig &cfg);
+    void watermarkConfigChanged(const WatermarkConfig &cfg);
 
 private:
     std::unique_ptr<LiveMonitorPagePrivate> const d_ptr;

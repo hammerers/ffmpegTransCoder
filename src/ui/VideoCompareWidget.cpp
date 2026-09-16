@@ -28,6 +28,8 @@ public:
     bool delogoEnabled{false};
     QRect delogoRect;
 
+    WatermarkConfig watermarkConfig;
+
     QString formatPts(double sec) const {
         int total = static_cast<int>(sec);
         int h = total / 3600;
@@ -49,33 +51,132 @@ public:
         if (!isStaticPreview) return; // 实时流由引擎直接提供
 
         processedFrame = originFrame.copy();
-        if (!delogoEnabled || delogoRect.isEmpty() || !delogoRect.isValid()) {
-            return;
+
+        // 1. 去水印平滑处理
+        if (delogoEnabled && !delogoRect.isEmpty() && delogoRect.isValid()) {
+            QRect r = delogoRect.intersected(processedFrame.rect());
+            if (r.width() > 2 && r.height() > 2) {
+                int x0 = r.left(), y0 = r.top(), x1 = r.right(), y1 = r.bottom();
+                int w = r.width(), h = r.height();
+                for (int y = y0; y <= y1; ++y) {
+                    float ty = static_cast<float>(y - y0) / static_cast<float>(h > 1 ? h - 1 : 1);
+                    QRgb topCol = processedFrame.pixel(std::clamp(x0, 0, processedFrame.width() - 1), std::max(0, y0 - 1));
+                    QRgb botCol = processedFrame.pixel(std::clamp(x0, 0, processedFrame.width() - 1), std::min(processedFrame.height() - 1, y1 + 1));
+                    for (int x = x0; x <= x1; ++x) {
+                        float tx = static_cast<float>(x - x0) / static_cast<float>(w > 1 ? w - 1 : 1);
+                        QRgb leftCol = processedFrame.pixel(std::max(0, x0 - 1), std::clamp(y, 0, processedFrame.height() - 1));
+                        QRgb rightCol = processedFrame.pixel(std::min(processedFrame.width() - 1, x1 + 1), std::clamp(y, 0, processedFrame.height() - 1));
+
+                        int rH = static_cast<int>((1.0f - tx) * qRed(leftCol) + tx * qRed(rightCol));
+                        int gH = static_cast<int>((1.0f - tx) * qGreen(leftCol) + tx * qGreen(rightCol));
+                        int bH = static_cast<int>((1.0f - tx) * qBlue(leftCol) + tx * qBlue(rightCol));
+
+                        int rV = static_cast<int>((1.0f - ty) * qRed(topCol) + ty * qRed(botCol));
+                        int gV = static_cast<int>((1.0f - ty) * qGreen(topCol) + ty * qGreen(botCol));
+                        int bV = static_cast<int>((1.0f - ty) * qBlue(topCol) + ty * qBlue(botCol));
+
+                        processedFrame.setPixel(x, y, qRgb((rH + rV) / 2, (gH + gV) / 2, (bH + bV) / 2));
+                    }
+                }
+            }
         }
 
-        QRect r = delogoRect.intersected(processedFrame.rect());
-        if (r.width() <= 2 || r.height() <= 2) return;
+        // 2. 自定义水印实时叠加模拟
+        if (watermarkConfig.enabled) {
+            QPainter p(&processedFrame);
+            p.setRenderHint(QPainter::Antialiasing, true);
+            p.setRenderHint(QPainter::SmoothPixmapTransform, true);
+            p.setOpacity(std::clamp(watermarkConfig.opacity, 0.05f, 1.0f));
 
-        int x0 = r.left(), y0 = r.top(), x1 = r.right(), y1 = r.bottom();
-        int w = r.width(), h = r.height();
-        for (int y = y0; y <= y1; ++y) {
-            float ty = static_cast<float>(y - y0) / static_cast<float>(h > 1 ? h - 1 : 1);
-            QRgb topCol = processedFrame.pixel(std::clamp(x0, 0, processedFrame.width() - 1), std::max(0, y0 - 1));
-            QRgb botCol = processedFrame.pixel(std::clamp(x0, 0, processedFrame.width() - 1), std::min(processedFrame.height() - 1, y1 + 1));
-            for (int x = x0; x <= x1; ++x) {
-                float tx = static_cast<float>(x - x0) / static_cast<float>(w > 1 ? w - 1 : 1);
-                QRgb leftCol = processedFrame.pixel(std::max(0, x0 - 1), std::clamp(y, 0, processedFrame.height() - 1));
-                QRgb rightCol = processedFrame.pixel(std::min(processedFrame.width() - 1, x1 + 1), std::clamp(y, 0, processedFrame.height() - 1));
+            int fw = processedFrame.width();
+            int fh = processedFrame.height();
 
-                int rH = static_cast<int>((1.0f - tx) * qRed(leftCol) + tx * qRed(rightCol));
-                int gH = static_cast<int>((1.0f - tx) * qGreen(leftCol) + tx * qGreen(rightCol));
-                int bH = static_cast<int>((1.0f - tx) * qBlue(leftCol) + tx * qBlue(rightCol));
+            if (watermarkConfig.type == WatermarkType::Image && !watermarkConfig.imagePath.isEmpty()) {
+                QImage img(watermarkConfig.imagePath);
+                if (!img.isNull()) {
+                    float s = std::clamp(watermarkConfig.scale, 0.1f, 3.0f);
+                    int nw = std::max(10, static_cast<int>(img.width() * s));
+                    int nh = std::max(10, static_cast<int>(img.height() * s));
+                    QImage scaledImg = img.scaled(nw, nh, Qt::KeepAspectRatio, Qt::SmoothTransformation);
 
-                int rV = static_cast<int>((1.0f - ty) * qRed(topCol) + ty * qRed(botCol));
-                int gV = static_cast<int>((1.0f - ty) * qGreen(topCol) + ty * qGreen(botCol));
-                int bV = static_cast<int>((1.0f - ty) * qBlue(topCol) + ty * qBlue(botCol));
+                    int tx = watermarkConfig.x;
+                    int ty = watermarkConfig.y;
+                    switch (watermarkConfig.position) {
+                    case WatermarkPosition::TopRight:
+                        tx = fw - scaledImg.width() - watermarkConfig.x;
+                        ty = watermarkConfig.y;
+                        break;
+                    case WatermarkPosition::TopLeft:
+                        tx = watermarkConfig.x;
+                        ty = watermarkConfig.y;
+                        break;
+                    case WatermarkPosition::BottomRight:
+                        tx = fw - scaledImg.width() - watermarkConfig.x;
+                        ty = fh - scaledImg.height() - watermarkConfig.y;
+                        break;
+                    case WatermarkPosition::BottomLeft:
+                        tx = watermarkConfig.x;
+                        ty = fh - scaledImg.height() - watermarkConfig.y;
+                        break;
+                    case WatermarkPosition::Center:
+                        tx = (fw - scaledImg.width()) / 2;
+                        ty = (fh - scaledImg.height()) / 2;
+                        break;
+                    case WatermarkPosition::Custom:
+                        tx = watermarkConfig.x;
+                        ty = watermarkConfig.y;
+                        break;
+                    }
+                    p.drawImage(tx, ty, scaledImg);
+                }
+            } else if (watermarkConfig.type == WatermarkType::Text && !watermarkConfig.text.isEmpty()) {
+                QFont font("Segoe UI", std::clamp(watermarkConfig.fontSize, 10, 120), QFont::Bold);
+                QFontMetrics fm(font);
+                QRect textRect = fm.boundingRect(watermarkConfig.text);
+                int padH = 8;
+                int padV = 4;
+                int tw = textRect.width() + padH * 2;
+                int th = textRect.height() + padV * 2;
 
-                processedFrame.setPixel(x, y, qRgb((rH + rV) / 2, (gH + gV) / 2, (bH + bV) / 2));
+                int tx = watermarkConfig.x;
+                int ty = watermarkConfig.y;
+                switch (watermarkConfig.position) {
+                case WatermarkPosition::TopRight:
+                    tx = fw - tw - watermarkConfig.x;
+                    ty = watermarkConfig.y;
+                    break;
+                case WatermarkPosition::TopLeft:
+                    tx = watermarkConfig.x;
+                    ty = watermarkConfig.y;
+                    break;
+                case WatermarkPosition::BottomRight:
+                    tx = fw - tw - watermarkConfig.x;
+                    ty = fh - th - watermarkConfig.y;
+                    break;
+                case WatermarkPosition::BottomLeft:
+                    tx = watermarkConfig.x;
+                    ty = fh - th - watermarkConfig.y;
+                    break;
+                case WatermarkPosition::Center:
+                    tx = (fw - tw) / 2;
+                    ty = (fh - th) / 2;
+                    break;
+                case WatermarkPosition::Custom:
+                    tx = watermarkConfig.x;
+                    ty = watermarkConfig.y;
+                    break;
+                }
+
+                QRect box(tx, ty, tw, th);
+                p.setBrush(QColor(15, 23, 42, 160));
+                p.setPen(Qt::NoPen);
+                p.drawRoundedRect(box, 4, 4);
+
+                QColor tc(watermarkConfig.fontColor);
+                if (!tc.isValid()) tc = Qt::white;
+                p.setPen(tc);
+                p.setFont(font);
+                p.drawText(box, Qt::AlignCenter, watermarkConfig.text);
             }
         }
     }
@@ -99,7 +200,6 @@ public:
         p.setBrush(QColor(244, 63, 94, 40));
         p.drawRect(box);
 
-        // 绘制四角加粗标记
         int cornerLen = std::min(8, std::min(rw / 3, rh / 3));
         p.setPen(QPen(QColor("#ffffff"), 2, Qt::SolidLine));
         p.drawLine(rx, ry, rx + cornerLen, ry);
@@ -196,6 +296,15 @@ void VideoCompareWidget::setDelogoHighlight(bool enabled, const QRect &rect) {
     update();
 }
 
+void VideoCompareWidget::setWatermarkConfig(const WatermarkConfig &cfg) {
+    Q_D(VideoCompareWidget);
+    d->watermarkConfig = cfg;
+    if (d->isStaticPreview) {
+        d->refreshProcessedFrame();
+    }
+    update();
+}
+
 bool VideoCompareWidget::hasFrames() const {
     return !d_ptr->originFrame.isNull() || !d_ptr->processedFrame.isNull();
 }
@@ -275,9 +384,14 @@ void VideoCompareWidget::paintEvent(QPaintEvent *) {
         p.setPen(QColor("#64748b"));
         f.setPixelSize(11);
         p.setFont(f);
-        p.drawText(rect().adjusted(0, 30, 0, 30), Qt::AlignCenter, "支持原画 vs 压制输出左右并排、无级卷帘拖拽与内存去水印实时调参");
+        p.drawText(rect().adjusted(0, 30, 0, 30), Qt::AlignCenter, "支持原画 vs 压制输出左右并排、无级卷帘拖拽与自定义水印/去水印实时调参");
         return;
     }
+
+    QString rightBadgeText = "压制输出";
+    if (d->watermarkConfig.enabled && d->delogoEnabled) rightBadgeText = "去水印+水印成品";
+    else if (d->watermarkConfig.enabled) rightBadgeText = "自定义水印成品";
+    else if (d->delogoEnabled) rightBadgeText = "去水印平滑成品";
 
     if (d->mode == CompareMode::SideBySide) {
         // 左右并排模式
@@ -310,8 +424,7 @@ void VideoCompareWidget::paintEvent(QPaintEvent *) {
 
         // 徽标指示
         d->drawBadge(p, QRect(leftRect.x() + 10, 10, 80, 22), "原画输入", QColor(30, 41, 59, 210), QColor("#38bdf8"));
-        QString rText = d->delogoEnabled ? "去水印/压制输出" : "压制输出";
-        d->drawBadge(p, QRect(rightRect.x() + 10, 10, 110, 22), rText, QColor(15, 60, 40, 210), QColor("#34d399"));
+        d->drawBadge(p, QRect(rightRect.x() + 10, 10, 120, 22), rightBadgeText, QColor(15, 60, 40, 210), QColor("#34d399"));
 
     } else if (d->mode == CompareMode::CurtainSplit) {
         // 卷帘分屏模式 (单个画面同屏切割对比)
@@ -358,8 +471,7 @@ void VideoCompareWidget::paintEvent(QPaintEvent *) {
 
         // 左右浮动标识
         d->drawBadge(p, QRect(10, 10, 80, 22), "原画输入", QColor(15, 23, 42, 200), QColor("#38bdf8"));
-        QString rText = d->delogoEnabled ? "去水印/压制输出" : "压制输出";
-        d->drawBadge(p, QRect(w - 120, 10, 110, 22), rText, QColor(15, 23, 42, 200), QColor("#34d399"));
+        d->drawBadge(p, QRect(w - 130, 10, 120, 22), rightBadgeText, QColor(15, 23, 42, 200), QColor("#34d399"));
 
     } else {
         // 仅处理后成品模式
@@ -369,8 +481,7 @@ void VideoCompareWidget::paintEvent(QPaintEvent *) {
             int py = (h - scaledProc.height()) / 2;
             p.drawImage(px, py, scaledProc);
         }
-        QString rText = d->delogoEnabled ? "去水印/压制输出" : "压制输出";
-        d->drawBadge(p, QRect(10, 10, 110, 22), rText, QColor(15, 23, 42, 200), QColor("#34d399"));
+        d->drawBadge(p, QRect(10, 10, 120, 22), rightBadgeText, QColor(15, 23, 42, 200), QColor("#34d399"));
     }
 
     // 底部浮动状态与信息条

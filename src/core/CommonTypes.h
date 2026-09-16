@@ -157,6 +157,34 @@ struct DelogoConfig {
     int height{60};
 };
 
+enum class WatermarkType {
+    Image,
+    Text
+};
+
+enum class WatermarkPosition {
+    TopRight,
+    TopLeft,
+    BottomRight,
+    BottomLeft,
+    Center,
+    Custom
+};
+
+struct WatermarkConfig {
+    bool enabled{false};
+    WatermarkType type{WatermarkType::Image};
+    QString imagePath;            // 本地图片路径 (PNG/JPG 等)
+    QString text{"FFmpeg Transcoder"}; // 文字水印内容
+    int fontSize{24};             // 文字字号
+    QString fontColor{"#ffffff"}; // 文字颜色 HEX
+    WatermarkPosition position{WatermarkPosition::TopRight};
+    int x{24};                    // 边距或自定义 X
+    int y{24};                    // 边距或自定义 Y
+    float opacity{0.85f};         // 不透明度 0.1 ~ 1.0
+    float scale{1.0f};            // 缩放比例 0.1 ~ 3.0
+};
+
 struct TranscodeConfig {
     QString inputPath;
     QString outputPath;
@@ -185,6 +213,7 @@ struct TranscodeConfig {
 
     HwAccelMode hwAccel{HwAccelMode::Auto};
     DelogoConfig delogo;
+    WatermarkConfig watermark;
 };
 
 struct TranscodeProgress {

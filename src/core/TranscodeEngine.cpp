@@ -4,11 +4,16 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QDebug>
+#include <QPainter>
+#include <QFont>
+#include <QFontMetrics>
+#include <QPoint>
 #include <thread>
 #include <atomic>
 #include <mutex>
 #include <condition_variable>
 #include <cstring>
+#include <algorithm>
 
 namespace ffmpeg_transform {
 
@@ -64,6 +69,140 @@ static void applyDelogoYuv(AVFrame *frame, const DelogoConfig &cfg) {
                 float horiz = (1.0f - tx) * leftVal + tx * rightVal;
                 float vert = (1.0f - ty) * topVal + ty * botVal;
                 uvData[y * uvPitch + x] = static_cast<uint8_t>((horiz + vert) * 0.5f);
+            }
+        }
+    }
+}
+
+// 预光栅化水印 ARGB32 位图并计算目标起始位置
+static QImage createWatermarkRaster(const WatermarkConfig &cfg, int frameWidth, int frameHeight, QPoint &outPos) {
+    if (!cfg.enabled || frameWidth <= 0 || frameHeight <= 0) return {};
+
+    QImage wm;
+    if (cfg.type == WatermarkType::Image) {
+        if (cfg.imagePath.isEmpty() || !QFile::exists(cfg.imagePath)) return {};
+        wm.load(cfg.imagePath);
+        if (wm.isNull()) return {};
+
+        if (std::abs(cfg.scale - 1.0f) > 0.01f && cfg.scale > 0.05f) {
+            int nw = std::clamp(static_cast<int>(wm.width() * cfg.scale), 10, frameWidth);
+            int nh = std::clamp(static_cast<int>(wm.height() * cfg.scale), 10, frameHeight);
+            wm = wm.scaled(nw, nh, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        }
+    } else {
+        if (cfg.text.isEmpty()) return {};
+        QFont font("Segoe UI", std::clamp(cfg.fontSize, 10, 120), QFont::Bold);
+        QFontMetrics fm(font);
+        QRect textRect = fm.boundingRect(cfg.text);
+        int padH = 8;
+        int padV = 4;
+        int w = textRect.width() + padH * 2;
+        int h = textRect.height() + padV * 2;
+
+        wm = QImage(w, h, QImage::Format_ARGB32_Premultiplied);
+        wm.fill(Qt::transparent);
+
+        QPainter p(&wm);
+        p.setRenderHint(QPainter::Antialiasing, true);
+        p.setRenderHint(QPainter::TextAntialiasing, true);
+
+        p.setBrush(QColor(15, 23, 42, 160));
+        p.setPen(Qt::NoPen);
+        p.drawRoundedRect(0, 0, w, h, 4, 4);
+
+        QColor textCol(cfg.fontColor);
+        if (!textCol.isValid()) textCol = Qt::white;
+        p.setPen(textCol);
+        p.setFont(font);
+        p.drawText(wm.rect(), Qt::AlignCenter, cfg.text);
+    }
+
+    if (wm.isNull() || wm.width() <= 0 || wm.height() <= 0) return {};
+    wm = wm.convertToFormat(QImage::Format_ARGB32);
+
+    int targetX = cfg.x;
+    int targetY = cfg.y;
+
+    switch (cfg.position) {
+    case WatermarkPosition::TopRight:
+        targetX = frameWidth - wm.width() - cfg.x;
+        targetY = cfg.y;
+        break;
+    case WatermarkPosition::TopLeft:
+        targetX = cfg.x;
+        targetY = cfg.y;
+        break;
+    case WatermarkPosition::BottomRight:
+        targetX = frameWidth - wm.width() - cfg.x;
+        targetY = frameHeight - wm.height() - cfg.y;
+        break;
+    case WatermarkPosition::BottomLeft:
+        targetX = cfg.x;
+        targetY = frameHeight - wm.height() - cfg.y;
+        break;
+    case WatermarkPosition::Center:
+        targetX = (frameWidth - wm.width()) / 2;
+        targetY = (frameHeight - wm.height()) / 2;
+        break;
+    case WatermarkPosition::Custom:
+        targetX = cfg.x;
+        targetY = cfg.y;
+        break;
+    }
+
+    outPos = QPoint(targetX, targetY);
+    return wm;
+}
+
+// 内存级图像算法：YUV420P 空间透明度 Alpha Blending 融合水印
+static void applyWatermarkYuv(AVFrame *frame, const QImage &wm, const QPoint &pos, float globalOpacity) {
+    if (!frame || wm.isNull() || globalOpacity <= 0.001f) return;
+    if (frame->format != AV_PIX_FMT_YUV420P) return;
+
+    int wmWidth = wm.width();
+    int wmHeight = wm.height();
+
+    int startX = std::max(0, pos.x());
+    int startY = std::max(0, pos.y());
+    int endX = std::min(frame->width, pos.x() + wmWidth);
+    int endY = std::min(frame->height, pos.y() + wmHeight);
+
+    if (startX >= endX || startY >= endY) return;
+
+    uint8_t *yData = frame->data[0];
+    uint8_t *uData = frame->data[1];
+    uint8_t *vData = frame->data[2];
+    int yPitch = frame->linesize[0];
+    int uPitch = frame->linesize[1];
+    int vPitch = frame->linesize[2];
+
+    for (int y = startY; y < endY; ++y) {
+        int wy = y - pos.y();
+        for (int x = startX; x < endX; ++x) {
+            int wx = x - pos.x();
+            QRgb pixel = wm.pixel(wx, wy);
+            int a = qAlpha(pixel);
+            if (a == 0) continue;
+
+            float alpha = (static_cast<float>(a) / 255.0f) * std::clamp(globalOpacity, 0.0f, 1.0f);
+            if (alpha <= 0.002f) continue;
+
+            int r = qRed(pixel);
+            int g = qGreen(pixel);
+            int b = qBlue(pixel);
+
+            // BT.601 RGB 转 YUV 快速整数换算
+            uint8_t yVal = static_cast<uint8_t>(std::clamp(((66 * r + 129 * g + 25 * b + 128) >> 8) + 16, 0, 255));
+            int yOffset = y * yPitch + x;
+            yData[yOffset] = static_cast<uint8_t>((1.0f - alpha) * yData[yOffset] + alpha * yVal);
+
+            if ((y % 2 == 0) && (x % 2 == 0)) {
+                uint8_t uVal = static_cast<uint8_t>(std::clamp(((-38 * r - 74 * g + 112 * b + 128) >> 8) + 128, 0, 255));
+                uint8_t vVal = static_cast<uint8_t>(std::clamp(((112 * r - 94 * g - 18 * b + 128) >> 8) + 128, 0, 255));
+
+                int uvOffset = (y / 2) * uPitch + (x / 2);
+                uData[uvOffset] = static_cast<uint8_t>((1.0f - alpha) * uData[uvOffset] + alpha * uVal);
+                vData[uvOffset] = static_cast<uint8_t>((1.0f - alpha) * vData[uvOffset] + alpha * vVal);
             }
         }
     }
@@ -475,6 +614,13 @@ public:
         int originCacheW = 0, originCacheH = 0;
         int procCacheW = 0, procCacheH = 0;
 
+        // 预光栅化自定义水印位图 (一次性生成，微秒级内存融合)
+        QPoint wmPos;
+        QImage wmRaster;
+        if (transcodeVideo && cfg.watermark.enabled) {
+            wmRaster = createWatermarkRaster(cfg.watermark, outVideoCodecCtx->width, outVideoCodecCtx->height, wmPos);
+        }
+
         // 5. 核心转码处理循环
         while (isRunning && !isCanceled) {
             // 处理暂停
@@ -516,6 +662,11 @@ public:
                             // 内存级图像算法：动态实时去水印与区域平滑
                             if (cfg.delogo.enabled) {
                                 applyDelogoYuv(scaledVideoFrame.get(), cfg.delogo);
+                            }
+
+                            // 内存级图像算法：自定义水印透明度 Alpha Blending 融合
+                            if (cfg.watermark.enabled && !wmRaster.isNull()) {
+                                applyWatermarkYuv(scaledVideoFrame.get(), wmRaster, wmPos, cfg.watermark.opacity);
                             }
 
                             // 动态精准时间戳计算 (弃用伪造的自增计数，按真实时间戳重映射对齐)
