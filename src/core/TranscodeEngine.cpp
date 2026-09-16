@@ -200,24 +200,44 @@ static void applyWatermarkYuv(AVFrame *frame, const QImage &wm, const QPoint &po
                 uint8_t uVal = static_cast<uint8_t>(std::clamp(((-38 * r - 74 * g + 112 * b + 128) >> 8) + 128, 0, 255));
                 uint8_t vVal = static_cast<uint8_t>(std::clamp(((112 * r - 94 * g - 18 * b + 128) >> 8) + 128, 0, 255));
 
-                int uvOffset = (y / 2) * uPitch + (x / 2);
-                uData[uvOffset] = static_cast<uint8_t>((1.0f - alpha) * uData[uvOffset] + alpha * uVal);
-                vData[uvOffset] = static_cast<uint8_t>((1.0f - alpha) * vData[uvOffset] + alpha * vVal);
+                int uOffset = (y / 2) * uPitch + (x / 2);
+                int vOffset = (y / 2) * vPitch + (x / 2);
+                uData[uOffset] = static_cast<uint8_t>((1.0f - alpha) * uData[uOffset] + alpha * uVal);
+                vData[vOffset] = static_cast<uint8_t>((1.0f - alpha) * vData[vOffset] + alpha * vVal);
             }
         }
     }
 }
 
-// 快速轻量提取预览 QImage 用于视口实时双分屏渲染
-static QImage avFrameToPreviewImage(AVFrame *frame, SwsContext *&cachedSws, int &cachedW, int &cachedH, int targetW, int targetH) {
+// 快速提取高质量预览 QImage 用于视口实时双分屏渲染 (严格保持真实宽高比与高解析度)
+static QImage avFrameToPreviewImage(AVFrame *frame, SwsContext *&cachedSws, int &cachedW, int &cachedH, int maxDim = 1280) {
     if (!frame || frame->width <= 0 || frame->height <= 0) return {};
+
+    int targetW = frame->width;
+    int targetH = frame->height;
+    if (targetW > maxDim || targetH > maxDim) {
+        if (targetW >= targetH) {
+            targetH = static_cast<int>(maxDim * static_cast<double>(frame->height) / frame->width);
+            targetW = maxDim;
+        } else {
+            targetW = static_cast<int>(maxDim * static_cast<double>(frame->width) / frame->height);
+            targetH = maxDim;
+        }
+    }
+    if (targetW <= 0) targetW = 2;
+    if (targetH <= 0) targetH = 2;
+    // 保证 16 字节对齐宽度，确保 SIMD 矢量化指令绝对安全且不溢出
+    if (targetW % 16 != 0) {
+        targetW = ((targetW + 15) / 16) * 16;
+    }
+    if (targetH % 2 != 0) targetH++;
 
     if (!cachedSws || cachedW != frame->width || cachedH != frame->height) {
         if (cachedSws) sws_freeContext(cachedSws);
         cachedSws = sws_getContext(
             frame->width, frame->height, static_cast<AVPixelFormat>(frame->format),
             targetW, targetH, AV_PIX_FMT_RGB24,
-            SWS_FAST_BILINEAR, nullptr, nullptr, nullptr
+            SWS_BILINEAR, nullptr, nullptr, nullptr
         );
         cachedW = frame->width;
         cachedH = frame->height;
@@ -225,11 +245,21 @@ static QImage avFrameToPreviewImage(AVFrame *frame, SwsContext *&cachedSws, int 
 
     if (!cachedSws) return {};
 
-    QImage img(targetW, targetH, QImage::Format_RGB888);
-    uint8_t *dstData[1] = { img.bits() };
-    int dstLinesize[1] = { static_cast<int>(img.bytesPerLine()) };
+    int numBytes = av_image_get_buffer_size(AV_PIX_FMT_RGB24, targetW, targetH, 32);
+    if (numBytes <= 0) return {};
+
+    auto *rgbBuffer = static_cast<uint8_t *>(av_malloc(numBytes + AV_INPUT_BUFFER_PADDING_SIZE));
+    if (!rgbBuffer) return {};
+
+    uint8_t *dstData[4] = { rgbBuffer, nullptr, nullptr, nullptr };
+    int dstLinesize[4] = { targetW * 3, 0, 0, 0 };
 
     sws_scale(cachedSws, frame->data, frame->linesize, 0, frame->height, dstData, dstLinesize);
+
+    QImage img(rgbBuffer, targetW, targetH, dstLinesize[0], QImage::Format_RGB888, [](void *ptr) {
+        av_free(ptr);
+    }, rgbBuffer);
+
     return img;
 }
 
@@ -691,8 +721,8 @@ public:
                             qint64 nowMs = timer.elapsed();
                             if (nowMs - lastPreviewEmitMs >= 40) {
                                 lastPreviewEmitMs = nowMs;
-                                QImage origImg = avFrameToPreviewImage(decodedFrame.get(), previewSwsOrigin, originCacheW, originCacheH, 480, 270);
-                                QImage procImg = avFrameToPreviewImage(scaledVideoFrame.get(), previewSwsProcessed, procCacheW, procCacheH, 480, 270);
+                                QImage origImg = avFrameToPreviewImage(decodedFrame.get(), previewSwsOrigin, originCacheW, originCacheH, 1280);
+                                QImage procImg = avFrameToPreviewImage(scaledVideoFrame.get(), previewSwsProcessed, procCacheW, procCacheH, 1280);
                                 double currentPtsSec = static_cast<double>(targetPts) * av_q2d(outVideoCodecCtx->time_base);
                                 emit q_ptr->frameRendered(origImg, procImg, currentPtsSec);
                             }

@@ -113,9 +113,13 @@ public:
             return false;
         }
 
-        // 计算目标宽高 (保持原始宽高比)
-        int dstWidth = targetWidth;
-        int dstHeight = static_cast<int>(dstWidth * static_cast<double>(frame->height) / frame->width);
+        // 计算目标宽高 (保持原始宽高比，若 targetWidth <= 0 则保持原画完整物理分辨率)
+        int dstWidth = frame->width;
+        int dstHeight = frame->height;
+        if (targetWidth > 0 && targetWidth < frame->width) {
+            dstWidth = targetWidth;
+            dstHeight = static_cast<int>(dstWidth * static_cast<double>(frame->height) / frame->width);
+        }
         if (dstHeight <= 0) dstHeight = 1;
         // 保证偶数尺寸
         if (dstWidth % 2 != 0) dstWidth++;
@@ -124,7 +128,7 @@ public:
         UniqueSwsContext swsCtx(sws_getContext(
             frame->width, frame->height, static_cast<AVPixelFormat>(frame->format),
             dstWidth, dstHeight, AV_PIX_FMT_RGB24,
-            SWS_BILINEAR, nullptr, nullptr, nullptr
+            SWS_BICUBIC, nullptr, nullptr, nullptr
         ));
 
         if (!swsCtx) {

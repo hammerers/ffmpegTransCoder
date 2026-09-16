@@ -24,14 +24,14 @@ public:
      * @param outImage 输出的缩略图 QImage
      * @param errorMsg 失败错误信息
      * @param seekRatio 提取时间位置比例 (默认 0.08，避开片头黑屏)
-     * @param targetWidth 缩略图宽度 (高度将按宽高比自适应)
+     * @param targetWidth 缩略图目标宽度 (<=0 则提取原画完整原生物理分辨率，高度按比例自适应)
      * @return 成功返回 true，失败返回 false
      */
     bool extractThumbnail(const QString &filePath,
                           QImage &outImage,
                           QString &errorMsg,
                           double seekRatio = 0.08,
-                          int targetWidth = 480);
+                          int targetWidth = 0);
 
 private:
     std::unique_ptr<ThumbnailExtractorPrivate> const d_ptr;

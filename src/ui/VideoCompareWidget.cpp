@@ -611,16 +611,17 @@ void VideoCompareWidget::paintEvent(QPaintEvent *) {
         timeText = QString("PTS %1 | 渲染帧 %2 | 左右并排实时检视").arg(d->formatPts(d->currentPts)).arg(d->frameCount);
     }
 
-    int pillW = std::max(220, static_cast<int>(timeText.length() * 7 + 30));
+    QFont f = p.font();
+    f.setPixelSize(11);
+    p.setFont(f);
+    QFontMetrics fm(f);
+    int pillW = fm.horizontalAdvance(timeText) + 24;
     QRect pillRect(12, h - 34, pillW, 24);
     p.setBrush(QColor(15, 23, 42, 220));
     p.setPen(QPen(d->isCompleted ? QColor("#059669") : (d->isStaticPreview ? QColor("#0284c7") : QColor("#334155")), 1));
     p.drawRoundedRect(pillRect, 4, 4);
 
     p.setPen(d->isCompleted ? QColor("#34d399") : (d->isStaticPreview ? QColor("#38bdf8") : QColor("#94a3b8")));
-    QFont f = p.font();
-    f.setPixelSize(11);
-    p.setFont(f);
     p.drawText(pillRect, Qt::AlignCenter, timeText);
 }
 
