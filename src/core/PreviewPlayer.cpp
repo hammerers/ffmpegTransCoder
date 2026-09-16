@@ -229,7 +229,9 @@ public:
     std::thread workerThread;
     std::mutex mtx;
     std::condition_variable cv;
-    std::mutex decoderMtx;
+    std::recursive_mutex decoderMtx;
+    QSize cachedSourceSize;
+    QSize cachedComparedSize;
 
     std::atomic<bool> seekPending{false};
     std::atomic<double> seekTargetPts{0.0};
@@ -252,7 +254,7 @@ public:
                 QImage img1, img2;
                 double pts1 = target, pts2 = target;
                 {
-                    std::lock_guard<std::mutex> decLock(decoderMtx);
+                    std::lock_guard<std::recursive_mutex> decLock(decoderMtx);
                     if (!isOpened) continue;
                     sourceDecoder.seek(target);
                     if (mode == PlaybackMode::DualSource) {
@@ -284,7 +286,7 @@ public:
             bool ok2 = true;
 
             {
-                std::lock_guard<std::mutex> decLock(decoderMtx);
+                std::lock_guard<std::recursive_mutex> decLock(decoderMtx);
                 if (!isOpened || !isPlaying) continue;
                 ok1 = sourceDecoder.decodeNextFrame(originImg, originPts);
                 if (mode == PlaybackMode::DualSource) {
@@ -294,7 +296,7 @@ public:
 
             if (!ok1) {
                 {
-                    std::lock_guard<std::mutex> decLock(decoderMtx);
+                    std::lock_guard<std::recursive_mutex> decLock(decoderMtx);
                     sourceDecoder.seek(0.0);
                     if (mode == PlaybackMode::DualSource) comparedDecoder.seek(0.0);
                 }
@@ -353,50 +355,73 @@ bool PreviewPlayer::open(const QString &sourcePath, const QString &comparedPath)
         return false;
     }
 
-    std::lock_guard<std::mutex> decLock(d->decoderMtx);
-
-    QString err;
-    if (!d->sourceDecoder.open(sourcePath, err)) {
-        qWarning() << "[PreviewPlayer] 打开主视频流失败:" << err;
-        d->mode = PlaybackMode::Idle;
-        d->isOpened = false;
-        return false;
-    }
-
-    d->durationSec = d->sourceDecoder.durationSec;
-    d->currentPts = 0.0;
-
-    if (!comparedPath.isEmpty() && QFile::exists(comparedPath)) {
-        QString err2;
-        if (d->comparedDecoder.open(comparedPath, err2)) {
-            d->mode = PlaybackMode::DualSource;
-            qDebug() << "[PreviewPlayer] 已加载双视频同步对比模式:" << sourcePath << "vs" << comparedPath;
-        } else {
-            d->mode = PlaybackMode::SingleSource;
-            qDebug() << "[PreviewPlayer] 副视频加载失败，降级为单视频调参预览模式";
-        }
-    } else {
-        d->mode = PlaybackMode::SingleSource;
-        d->comparedDecoder.close();
-        qDebug() << "[PreviewPlayer] 已加载单视频调参播放模式:" << sourcePath;
-    }
-
-    d->isOpened = true;
-
-    // 同步解码出第一帧用于就绪画面呈现
     QImage img1, img2;
     double pts1 = 0.0, pts2 = 0.0;
-    if (d->sourceDecoder.decodeNextFrame(img1, pts1)) {
-        d->currentPts = pts1;
-        if (d->mode == PlaybackMode::DualSource) {
-            d->comparedDecoder.decodeNextFrame(img2, pts2);
-        }
-    }
+    PlaybackMode openedMode = PlaybackMode::Idle;
+    double openedDuration = 0.0;
 
-    emit mediaOpened(d->mode, d->durationSec);
+    {
+        std::lock_guard<std::recursive_mutex> decLock(d->decoderMtx);
+
+        QString err;
+        if (!d->sourceDecoder.open(sourcePath, err)) {
+            qWarning() << "[PreviewPlayer] 打开主视频流失败:" << err;
+            d->mode = PlaybackMode::Idle;
+            d->isOpened = false;
+            d->cachedSourceSize = QSize();
+            d->cachedComparedSize = QSize();
+            return false;
+        }
+
+        d->durationSec = d->sourceDecoder.durationSec;
+        d->currentPts = 0.0;
+
+        if (d->sourceDecoder.codecCtx && d->sourceDecoder.codecCtx->width > 0) {
+            d->cachedSourceSize = QSize(d->sourceDecoder.codecCtx->width, d->sourceDecoder.codecCtx->height);
+        } else {
+            d->cachedSourceSize = QSize();
+        }
+
+        if (!comparedPath.isEmpty() && QFile::exists(comparedPath)) {
+            QString err2;
+            if (d->comparedDecoder.open(comparedPath, err2)) {
+                d->mode = PlaybackMode::DualSource;
+                if (d->comparedDecoder.codecCtx && d->comparedDecoder.codecCtx->width > 0) {
+                    d->cachedComparedSize = QSize(d->comparedDecoder.codecCtx->width, d->comparedDecoder.codecCtx->height);
+                } else {
+                    d->cachedComparedSize = QSize();
+                }
+                qDebug() << "[PreviewPlayer] 已加载双视频同步对比模式:" << sourcePath << "vs" << comparedPath;
+            } else {
+                d->mode = PlaybackMode::SingleSource;
+                d->cachedComparedSize = QSize();
+                qDebug() << "[PreviewPlayer] 副视频加载失败，降级为单视频调参预览模式";
+            }
+        } else {
+            d->mode = PlaybackMode::SingleSource;
+            d->comparedDecoder.close();
+            d->cachedComparedSize = QSize();
+            qDebug() << "[PreviewPlayer] 已加载单视频调参播放模式:" << sourcePath;
+        }
+
+        d->isOpened = true;
+
+        // 同步解码出第一帧用于就绪画面呈现
+        if (d->sourceDecoder.decodeNextFrame(img1, pts1)) {
+            d->currentPts = pts1;
+            if (d->mode == PlaybackMode::DualSource) {
+                d->comparedDecoder.decodeNextFrame(img2, pts2);
+            }
+        }
+
+        openedMode = d->mode;
+        openedDuration = d->durationSec;
+    } // 锁在此释放，信号派发与同步回调执行时绝无死锁风险
+
+    emit mediaOpened(openedMode, openedDuration);
     if (!img1.isNull()) {
         emit frameReady(img1, img2, pts1);
-        emit positionChanged(pts1, d->durationSec);
+        emit positionChanged(pts1, openedDuration);
     }
     return true;
 }
@@ -404,13 +429,15 @@ bool PreviewPlayer::open(const QString &sourcePath, const QString &comparedPath)
 void PreviewPlayer::close() {
     Q_D(PreviewPlayer);
     pause();
-    std::lock_guard<std::mutex> decLock(d->decoderMtx);
+    std::lock_guard<std::recursive_mutex> decLock(d->decoderMtx);
     d->sourceDecoder.close();
     d->comparedDecoder.close();
     d->mode = PlaybackMode::Idle;
     d->isOpened = false;
     d->durationSec = 0.0;
     d->currentPts = 0.0;
+    d->cachedSourceSize = QSize();
+    d->cachedComparedSize = QSize();
 }
 
 PlaybackMode PreviewPlayer::mode() const {
@@ -482,20 +509,12 @@ void PreviewPlayer::stop() {
 
 QSize PreviewPlayer::sourceVideoSize() const {
     Q_D(const PreviewPlayer);
-    std::lock_guard<std::mutex> lock(const_cast<PreviewPlayerPrivate*>(d)->decoderMtx);
-    if (d->sourceDecoder.codecCtx && d->sourceDecoder.codecCtx->width > 0) {
-        return QSize(d->sourceDecoder.codecCtx->width, d->sourceDecoder.codecCtx->height);
-    }
-    return QSize();
+    return d->cachedSourceSize;
 }
 
 QSize PreviewPlayer::comparedVideoSize() const {
     Q_D(const PreviewPlayer);
-    std::lock_guard<std::mutex> lock(const_cast<PreviewPlayerPrivate*>(d)->decoderMtx);
-    if (d->comparedDecoder.codecCtx && d->comparedDecoder.codecCtx->width > 0) {
-        return QSize(d->comparedDecoder.codecCtx->width, d->comparedDecoder.codecCtx->height);
-    }
-    return QSize();
+    return d->cachedComparedSize;
 }
 
 } // namespace ffmpeg_transform
